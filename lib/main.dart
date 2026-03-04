@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Contains StateNotifier
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // Contains ChangeNotifierProvider, StateNotifierProvider, ConsumerWidget, WidgetRef
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,7 +11,9 @@ void main() {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-final themeProvider = ChangeNotifierProvider((ref) => ThemeProvider());
+final themeProvider = ChangeNotifierProvider<ThemeProvider>(
+  (ref) => ThemeProvider(),
+);
 
 class ThemeProvider with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
@@ -109,7 +112,7 @@ class BPMService {
 
   void start() {
     _timer = Timer.periodic(Duration(milliseconds: 60000 ~/ _appState.bpm), (
-      timer,
+      _, // Changed 'timer' to '_' to indicate unused parameter
     ) {
       _audioService.play(_appState.sound);
     });
@@ -126,9 +129,7 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeProvider = ref.watch<ThemeProvider>(
-      ChangeNotifierProvider((ref) => ThemeProvider()),
-    );
+    final themeProviderState = ref.watch(themeProvider); // Corrected access
     return MaterialApp(
       title: 'StepWithMe',
       theme: ThemeData(
@@ -147,7 +148,7 @@ class MyApp extends ConsumerWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(),
       ),
-      themeMode: themeProvider.themeMode,
+      themeMode: themeProviderState.themeMode, // Corrected access
       home: const HomePage(),
     );
   }
@@ -162,13 +163,22 @@ class HomePage extends ConsumerWidget {
     final stateService = ref.read(stateServiceProvider.notifier);
     final bpmService = ref.read(bpmServiceProvider);
 
+    // Start/stop BPM service based on appState.isPlaying
+    if (appState.isPlaying) {
+      bpmService.start();
+    } else {
+      bpmService.stop();
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('StepWithMe'),
         actions: [
           IconButton(
             icon: const Icon(Icons.brightness_6),
-            onPressed: () => ref.read(themeProvider).toggleTheme(),
+            onPressed: () => ref
+                .read(themeProvider.notifier)
+                .toggleTheme(), // Corrected access
           ),
         ],
       ),
@@ -208,11 +218,6 @@ class HomePage extends ConsumerWidget {
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           stateService.togglePlay();
-          if (appState.isPlaying) {
-            bpmService.start();
-          } else {
-            bpmService.stop();
-          }
         },
         child: Icon(appState.isPlaying ? Icons.pause : Icons.play_arrow),
       ),
