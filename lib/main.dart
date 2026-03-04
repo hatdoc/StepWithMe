@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-// Contains StateNotifier
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // Contains ChangeNotifierProvider, StateNotifierProvider, ConsumerWidget, WidgetRef
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:myapp/initial_page.dart';
+import 'package:myapp/user_info_page.dart';
+import 'package:riverpod/riverpod.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -111,11 +113,14 @@ class BPMService {
   BPMService(this._audioService, this._appState);
 
   void start() {
-    _timer = Timer.periodic(Duration(milliseconds: 60000 ~/ _appState.bpm), (
-      _, // Changed 'timer' to '_' to indicate unused parameter
-    ) {
-      _audioService.play(_appState.sound);
-    });
+    _timer?.cancel(); // Cancel any existing timer
+    if (_appState.isPlaying) {
+      _timer = Timer.periodic(Duration(milliseconds: 60000 ~/ _appState.bpm), (
+        _,
+      ) {
+        _audioService.play(_appState.sound);
+      });
+    }
   }
 
   void stop() {
@@ -129,7 +134,7 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeProviderState = ref.watch(themeProvider); // Corrected access
+    final themeProviderState = ref.watch(themeProvider);
     return MaterialApp(
       title: 'StepWithMe',
       theme: ThemeData(
@@ -148,8 +153,13 @@ class MyApp extends ConsumerWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(),
       ),
-      themeMode: themeProviderState.themeMode, // Corrected access
-      home: const HomePage(),
+      themeMode: themeProviderState.themeMode,
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const InitialPage(),
+        '/home': (context) => const HomePage(),
+        '/user-info': (context) => const UserInfoPage(),
+      },
     );
   }
 }
@@ -176,9 +186,7 @@ class HomePage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.brightness_6),
-            onPressed: () => ref
-                .read(themeProvider.notifier)
-                .toggleTheme(), // Corrected access
+            onPressed: () => ref.read(themeProvider.notifier).toggleTheme(),
           ),
         ],
       ),

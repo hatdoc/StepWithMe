@@ -858,3 +858,24 @@ When requested for Firebase add the following the server configurations to .idx/
         *   Toggling play/pause functionality using a `FloatingActionButton`.
 *   **Error Resolution:** Addressed multiple compilation errors related to `riverpod` imports and usage by ensuring correct import paths, explicit type declarations, and proper access to `StateNotifier`'s `state` property.
 *   **Status:** The application successfully compiles and launches on an Android emulator.
+
+---
+## Wednesday, March 4, 2026
+
+**User Info Page and Bug Fixes**
+
+*   **Objective:** Add a user information page to collect height and weight, and fix a bug in the `BPMService`.
+*   **Bug Fix (`BPMService`):**
+    *   Identified and fixed a bug where multiple timers could be created in `BPMService`, leading to unpredictable behavior. The `start()` method now cancels any existing timer before creating a new one.
+*   **User Info Page:**
+    *   Created `lib/user_info_page.dart` with a form to collect the user's height and weight.
+    *   Used `shared_preferences` to persist the user's information.
+*   **Navigation:**
+    *   Created `lib/initial_page.dart` to handle the initial routing logic.
+    *   The app now starts with `InitialPage`, which checks for saved user information.
+    *   If user information is found, the app navigates to `HomePage`; otherwise, it navigates to `UserInfoPage`.
+    *   Updated `lib/main.dart` to use named routes for navigation.
+*   **Code Quality:**
+    *   Refactored `lib/main.dart` to remove duplicated code and improve organization.
+    *   Fixed a typo in `StateService` that was causing a formatting error.
+*   **Status:** The application successfully compiles and launches on an Android emulator with the new user information flow.
