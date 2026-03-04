@@ -80,7 +80,7 @@ flutter pub add google_fonts
 *Example `TextTheme` with `google_fonts`:*
 
 ```
-import 'package:google_fonts/google_fonts.dart';
+import 'package:google_fonts.dart';
 
 final TextTheme myTextTheme = TextTheme(
   displayLarge: GoogleFonts.oswald(fontSize: 57, fontWeight: FontWeight.bold),
@@ -168,7 +168,7 @@ class MyApp extends StatelessWidget {
         foregroundColor: Colors.white,
         titleTextStyle: GoogleFonts.oswald(fontSize: 24, fontWeight: FontWeight.bold),
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
+      elevatedButtonTheme: ElevatedButtonData(
         style: ElevatedButton.styleFrom(
           foregroundColor: Colors.white,
           backgroundColor: primarySeedColor,
@@ -192,7 +192,7 @@ class MyApp extends StatelessWidget {
         foregroundColor: Colors.white,
         titleTextStyle: GoogleFonts.oswald(fontSize: 24, fontWeight: FontWeight.bold),
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
+      elevatedButtonTheme: ElevatedButtonData(
         style: ElevatedButton.styleFrom(
           foregroundColor: Colors.black,
           backgroundColor: primarySeedColor.shade200,
@@ -879,3 +879,24 @@ When requested for Firebase add the following the server configurations to .idx/
     *   Refactored `lib/main.dart` to remove duplicated code and improve organization.
     *   Fixed a typo in `StateService` that was causing a formatting error.
 *   **Status:** The application successfully compiles and launches on an Android emulator with the new user information flow.
+
+---
+## Wednesday, March 4, 2026
+
+**UI/UX Improvements and Speed Recommendation**
+
+*   **Objective:** Modernize the UI of `UserInfoPage` and `HomePage`, and add a "Recommend Speed" feature.
+*   **Dependencies:**
+    *   Added `sleek_circular_slider` to `pubspec.yaml` for a circular BPM slider.
+*   **User Info Page (`lib/user_info_page.dart`):**
+    *   Redesigned for a cleaner and more modern look using `Card`s, improved spacing, and updated text field styles.
+    *   Pre-fills height and weight fields with saved data from `shared_preferences`.
+*   **Home Page (`lib/main.dart`):**
+    *   Implemented a visually engaging circular slider (`sleek_circular_slider`) for BPM control.
+    *   Replaced basic sound selection buttons with a more elegant `DropdownButton`.
+    *   Added a "Recommend Speed" button that sets the BPM to a default of 120, a general recommendation for a brisk, fat-burning walk (as direct calculation from height/weight for BPM isn't standard).
+    *   Added a "Settings" icon button to the `AppBar` that navigates to the `UserInfoPage`.
+    *   Improved overall layout, spacing, and styling for a modern aesthetic.
+*   **Code Quality:**
+    *   Corrected the placement of the `sleek_circular_slider` import in `lib/main.dart`.
+*   **Status:** The application successfully compiles and launches on an Android emulator with the updated UI and new features.

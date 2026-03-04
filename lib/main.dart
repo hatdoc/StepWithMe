@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:myapp/initial_page.dart';
 import 'package:myapp/user_info_page.dart';
 import 'package:riverpod/riverpod.dart';
+import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -169,11 +170,16 @@ class HomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
     final appState = ref.watch(stateServiceProvider);
+
     final stateService = ref.read(stateServiceProvider.notifier);
+
     final bpmService = ref.read(bpmServiceProvider);
 
     // Start/stop BPM service based on appState.isPlaying
+
     if (appState.isPlaying) {
       bpmService.start();
     } else {
@@ -182,53 +188,182 @@ class HomePage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('StepWithMe'),
+        title: Text(
+          'StepWithMe',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).pushNamed('/user-info');
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.brightness_6),
             onPressed: () => ref.read(themeProvider.notifier).toggleTheme(),
           ),
         ],
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        foregroundColor: theme.colorScheme.onSurface,
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${appState.bpm}',
-              style: Theme.of(context).textTheme.displayLarge,
-            ),
-            const SizedBox(height: 20),
-            Slider(
-              value: appState.bpm.toDouble(),
-              min: 60,
-              max: 200,
-              onChanged: (value) => stateService.setBpm(value.toInt()),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () => stateService.setSound('step1.mp3'),
-                  child: const Text('Sound 1'),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
                 ),
-                const SizedBox(width: 20),
-                ElevatedButton(
-                  onPressed: () => stateService.setSound('step2.mp3'),
-                  child: const Text('Sound 2'),
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Beats Per Minute',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SleekCircularSlider(
+                        min: 60,
+                        max: 200,
+                        initialValue: appState.bpm.toDouble(),
+                        onChange: (value) {
+                          stateService.setBpm(value.toInt());
+                        },
+                        innerWidget: (double value) {
+                          return Center(
+                            child: Text(
+                              '${value.toInt()}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 48,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          );
+                        },
+                        appearance: CircularSliderAppearance(
+                          customColors: CustomSliderColors(
+                            trackColor: theme.colorScheme.secondary.withOpacity(
+                              0.2,
+                            ),
+                            progressBarColor: theme.colorScheme.primary,
+                            dotColor: theme.colorScheme.primary,
+                          ),
+                          customWidths: CustomSliderWidths(
+                            trackWidth: 12,
+                            progressBarWidth: 12,
+                            handlerSize: 8,
+                          ),
+                          size: 250,
+                          startAngle: 180,
+                          angleRange: 360,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          stateService.setBpm(120);
+                        },
+                        child: const Text('Recommend Speed'),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 32),
+              _buildSoundSelector(context, ref),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           stateService.togglePlay();
         },
-        child: Icon(appState.isPlaying ? Icons.pause : Icons.play_arrow),
+
+        label: Text(
+          appState.isPlaying ? 'Pause' : 'Play',
+
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+
+        icon: Icon(appState.isPlaying ? Icons.pause : Icons.play_arrow),
+
+        backgroundColor: theme.colorScheme.primary,
+
+        foregroundColor: theme.colorScheme.onPrimary,
+
+        elevation: 8,
+      ),
+
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildSoundSelector(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    final appState = ref.watch(stateServiceProvider);
+
+    final stateService = ref.read(stateServiceProvider.notifier);
+
+    return Card(
+      elevation: 8,
+
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: appState.sound,
+
+            isExpanded: true,
+
+            icon: Icon(
+              Icons.arrow_drop_down_circle,
+              color: theme.colorScheme.primary,
+            ),
+
+            items: [
+              _buildDropdownItem('Step 1', 'step1.mp3'),
+
+              _buildDropdownItem('Step 2', 'step2.mp3'),
+            ],
+
+            onChanged: (value) {
+              if (value != null) {
+                stateService.setSound(value);
+              }
+            },
+
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+
+              color: theme.colorScheme.onSurface,
+            ),
+
+            dropdownColor: theme.cardColor,
+          ),
+        ),
       ),
     );
+  }
+
+  DropdownMenuItem<String> _buildDropdownItem(String text, String value) {
+    return DropdownMenuItem(value: value, child: Text(text));
   }
 }
