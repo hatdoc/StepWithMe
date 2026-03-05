@@ -4,13 +4,11 @@ import 'dart:developer' as developer;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:myapp/initial_page.dart';
 import 'package:myapp/user_info_page.dart';
-import 'package:riverpod/riverpod.dart';
 import 'package:sleek_circular_slider/sleek_circular_slider.dart';
 
 void main() {
@@ -131,58 +129,70 @@ class AppState {
     return 'Obese';
   }
 
-  // --- REFINED DYNAMIC CADENCE LOGIC ---
+  // --- REFINED DYNAMIC CADENCE LOGIC (Based on CADENCE-Adults Study) ---
   
-  // 1. Age Factor: Cadence naturally slows with age to maintain same intensity.
-  // Base moderate cadence for a 20yo is ~130. Drops by ~0.4 per year.
-  double get _ageImpact => (age ?? 30) * 0.4;
+  // Baseline: 100 steps/min is the floor for moderate intensity (3 METs).
+  // Vigorous intensity (6 METs) starts at ~130 steps/min.
+  
+  // 1. Age Factor: Max heart rate drops with age. 
+  // Older people reach target zones at slightly lower cadences.
+  // Base moderate cadence drops by ~0.3 per year past 20.
+  double get _ageImpact => ((age ?? 30) - 20).clamp(0, 80) * 0.3;
 
-  // 2. Height (Stride) Factor: Taller people take longer strides, so they need FEWER steps
-  // to reach the same speed/intensity.
-  // We use 170cm as baseline. Every 10cm difference impacts cadence by ~4 spm.
-  double get _heightImpact => ((height ?? 170) - 170) / 10 * 4;
+  // 2. Height (Stride) Factor: Taller people have longer strides.
+  // To maintain the same SPEED (m/min) as a 170cm person, 
+  // they need fewer steps/min.
+  // Formula: Cadence2 = Cadence1 * (Height1 / Height2)
+  // We use 170cm as baseline.
+  double get _heightImpact {
+    if (height == null || height == 0) return 1.0;
+    return 170 / height!;
+  }
 
-  // 3. BMI (Mass) Factor: Heavier people burn more calories at lower speeds.
-  // To stay in "Fat Burn" zone, they need slightly lower cadence than lean people.
-  // Baseline BMI 22. Every point above impacts cadence by ~1.2 spm.
-  double get _bmiImpact => ((bmi ?? 22) - 22) * 1.2;
+  // 3. BMI (Mass) Factor: Heavier people burn more calories at lower cadences.
+  // To stay in the "Fat Burn" (Moderate) zone, they need slightly lower cadence
+  // than lean people to avoid crossing into vigorous heart rate zones.
+  // Every BMI point above 22 reduces target cadence by ~0.8 spm.
+  double get _bmiImpact => ((bmi ?? 22) - 22) * 0.8;
+
+  // Base for Fat Burn (Moderate Intensity) is 105 for a 20yo at 170cm.
+  double get _baseCadence => 105 - _ageImpact - _bmiImpact;
 
   int get recommendedLight {
-    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
-    return (base - 25).round().clamp(60, 200);
+    return (_baseCadence * 0.85 * _heightImpact).round().clamp(60, 200);
   }
 
   int get recommendedFatBurn {
-    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
-    return base.round().clamp(60, 200);
+    return (_baseCadence * _heightImpact).round().clamp(60, 200);
   }
 
   int get recommendedJogging {
-    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
-    return (base + 30).round().clamp(60, 200);
+    // Jogging is the transition to vigorous (~125-135 spm)
+    return ((_baseCadence + 25) * _heightImpact).round().clamp(60, 200);
   }
 
   int get recommendedRunning {
-    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
-    return (base + 55).round().clamp(60, 200);
+    // Running is vigorous intensity (6+ METs)
+    return ((_baseCadence + 50) * _heightImpact).round().clamp(60, 200);
   }
 
   double get estimatedMETs {
-    if (bpm < 80) return 2.0;
-    if (bpm < 100) return 3.0;
-    if (bpm < 120) return 4.5;
-    if (bpm < 140) return 6.0;
-    if (bpm < 160) return 8.0;
-    return 10.0;
+    // Refined MET estimation based on cadence
+    // METs ≈ 0.04 * cadence - 1.0 (Approximate linear fit from CADENCE-Adults)
+    double val = 0.04 * bpm - 1.0;
+    return val.clamp(1.0, 15.0);
   }
 
   double get caloriesPerMinute {
     if (weight == null) return 0;
+    // Standard Metabolic Equation
     return (estimatedMETs * 3.5 * weight!) / 200;
   }
 }
 
 class StateService extends StateNotifier<AppState> {
+  bool _isLoading = true;
+
   StateService() : super(AppState(bpm: 120, isPlaying: false, sound: 'heel_strike')) {
     _loadState();
   }
@@ -193,25 +203,39 @@ class StateService extends StateNotifier<AppState> {
     final wStr = prefs.getString('weight');
     final aStr = prefs.getString('age');
 
-    state = state.copyWith(
+    final newState = state.copyWith(
       bpm: prefs.getInt('bpm') ?? 120,
       sound: prefs.getString('sound') ?? 'heel_strike',
-      height: hStr != null ? double.tryParse(hStr) : null,
-      weight: wStr != null ? double.tryParse(wStr) : null,
-      age: aStr != null ? int.tryParse(aStr) : null,
+      height: hStr != null ? double.tryParse(hStr.replaceAll(',', '')) : null,
+      weight: wStr != null ? double.tryParse(wStr.replaceAll(',', '')) : null,
+      age: aStr != null ? int.tryParse(aStr.replaceAll(',', '')) : null,
     );
+    
+    // Only apply if we are still in the loading phase to avoid overwriting 
+    // updates that happened during the async load.
+    if (_isLoading) {
+      state = newState;
+      _isLoading = false;
+    }
   }
 
   Future<void> updateUserInfo({required String height, required String weight, required String age}) async {
+    _isLoading = false; // Stop any pending load from overwriting this
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('height', height);
-    await prefs.setString('weight', weight);
-    await prefs.setString('age', age);
+    
+    // Clean inputs
+    final cleanHeight = height.replaceAll(',', '').trim();
+    final cleanWeight = weight.replaceAll(',', '').trim();
+    final cleanAge = age.replaceAll(',', '').trim();
+
+    await prefs.setString('height', cleanHeight);
+    await prefs.setString('weight', cleanWeight);
+    await prefs.setString('age', cleanAge);
     
     state = state.copyWith(
-      height: double.tryParse(height),
-      weight: double.tryParse(weight),
-      age: int.tryParse(age),
+      height: double.tryParse(cleanHeight),
+      weight: double.tryParse(cleanWeight),
+      age: int.tryParse(cleanAge),
     );
   }
 
@@ -539,7 +563,7 @@ class HomePage extends ConsumerWidget {
       onPressed: () => service.setBpm(value),
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        backgroundColor: isSelected ? theme.colorScheme.primary : theme.colorScheme.surfaceVariant,
+        backgroundColor: isSelected ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest,
         foregroundColor: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
         elevation: isSelected ? 6 : 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

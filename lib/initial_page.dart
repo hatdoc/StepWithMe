@@ -21,6 +21,7 @@ class _InitialPageState extends State<InitialPage> {
     final weight = prefs.getString('weight');
     final age = prefs.getString('age');
 
+    if (!mounted) return;
     if (height != null && weight != null && age != null) {
       Navigator.of(context).pushReplacementNamed('/home');
     } else {
