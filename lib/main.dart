@@ -36,32 +36,40 @@ final audioServiceProvider = Provider((ref) => AudioService());
 
 class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isInitialized = false;
 
   AudioService() {
+    _init();
+  }
+
+  Future<void> _init() async {
     if (kIsWeb) {
-      _audioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _audioPlayer.setReleaseMode(ReleaseMode.stop);
     }
+    _isInitialized = true;
   }
 
   Future<void> play(String soundKey) async {
+    if (!_isInitialized) await _init();
+
     String soundFile;
     switch (soundKey) {
       case 'heel_strike':
-        soundFile = 'walking_wood_floor.mp3'; // Using a real file as default
+        soundFile = 'walking_wood_floor.mp3';
         break;
       case 'soft_sneaker':
-        soundFile = 'walking_in_forest.mp3'; // Using a real file as default
+        soundFile = 'walking_in_forest.mp3';
         break;
       default:
         soundFile = soundKey;
     }
 
     try {
-      // For precision, especially on web, we ensure the player is ready
+      // On some browsers/devices, stopping before playing helps precision
       await _audioPlayer.stop();
       await _audioPlayer.play(AssetSource('audio/$soundFile'), volume: 1.0);
     } catch (e) {
-      developer.log('Playback error: $e', name: 'AudioService', level: 1000);
+      developer.log('Playback error for $soundFile: $e', name: 'AudioService', level: 1000);
     }
   }
 
@@ -123,33 +131,67 @@ class AppState {
     return 'Obese';
   }
 
-  // Recommended speeds based on BMI and Age
+  // --- Scientific Cadence Logic ---
+  
+  // Base moderate intensity (3 METs) varies by age:
+  // 21-30: ~125 spm
+  // 31-40: ~123 spm
+  // 41-50: ~120 spm
+  // 51-60: ~115 spm
+  // 61-85: ~102 spm
+  int get _baseModerateCadence {
+    final a = age ?? 30;
+    if (a <= 30) return 125;
+    if (a <= 40) return 123;
+    if (a <= 50) return 120;
+    if (a <= 60) return 115;
+    return 102;
+  }
+
+  // BMI/Weight Adjustment: 
+  // For every 10kg above "Normal" BMI (midpoint 22), cadence req drops by ~2.5 spm.
+  int get _cadenceOffset {
+    if (height == null || weight == null) return 0;
+    double normalWeight = 22 * ((height! / 100) * (height! / 100));
+    double excessWeight = weight! - normalWeight;
+    if (excessWeight <= 0) return 0;
+    return (excessWeight / 10 * 2.5).round();
+  }
+
   int get recommendedLight {
-    final category = bmiCategory;
-    if (category == 'Obese') return 90;
-    if (category == 'Overweight') return 100;
-    return 110;
+    // Light is roughly 80% of moderate
+    return (_baseModerateCadence - _cadenceOffset - 20).clamp(60, 200);
   }
 
   int get recommendedFatBurn {
-    final category = bmiCategory;
-    if (category == 'Obese') return 110;
-    if (category == 'Overweight') return 120;
-    return 130;
+    return (_baseModerateCadence - _cadenceOffset).clamp(60, 200);
   }
 
   int get recommendedJogging {
-    final category = bmiCategory;
-    if (category == 'Obese') return 130;
-    if (category == 'Overweight') return 140;
-    return 150;
+    // Vigorous is roughly moderate + 25-30 spm
+    return (_baseModerateCadence - _cadenceOffset + 25).clamp(60, 200);
   }
 
   int get recommendedRunning {
-    final category = bmiCategory;
-    if (category == 'Obese') return 150;
-    if (category == 'Overweight') return 160;
-    return 170;
+    // Athletic running is usually 160-180
+    return (_baseModerateCadence - _cadenceOffset + 50).clamp(150, 190);
+  }
+
+  // MET (Metabolic Equivalent of Task) estimate
+  // 100 spm is approx 3 METs. 130 spm is approx 6 METs.
+  double get estimatedMETs {
+    if (bpm < 80) return 2.0;
+    if (bpm < 100) return 3.0;
+    if (bpm < 120) return 4.5;
+    if (bpm < 140) return 6.0;
+    if (bpm < 160) return 8.0;
+    return 10.0;
+  }
+
+  double get caloriesPerMinute {
+    if (weight == null) return 0;
+    // Formula: (MET * 3.5 * weight_kg) / 200
+    return (estimatedMETs * 3.5 * weight!) / 200;
   }
 }
 
@@ -337,26 +379,19 @@ class HomePage extends ConsumerWidget {
                   child: Column(
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildStatItem(
-                            'BMI',
-                            appState.bmi?.toStringAsFixed(1) ?? '--',
-                            theme,
-                          ),
-                          _buildStatItem(
-                            'Category',
-                            appState.bmiCategory,
-                            theme,
-                          ),
+                          _buildStatItem('BMI', appState.bmi?.toStringAsFixed(1) ?? '--', theme),
+                          _buildStatItem('Category', appState.bmiCategory, theme),
+                          _buildStatItem('Burn/Hr', '${(appState.caloriesPerMinute * 60).toInt()} kcal', theme),
                         ],
                       ),
                       const Divider(height: 32),
                       Text(
-                        'Target Fat Loss Heart Rate: $fatBurnMin - $fatBurnMax BPM',
+                        'Target Fat Loss HR: $fatBurnMin-$fatBurnMax BPM',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                           color: theme.colorScheme.secondary,
                         ),
                       ),
@@ -375,7 +410,7 @@ class HomePage extends ConsumerWidget {
                   child: Column(
                     children: [
                       Text(
-                        'Steps Per Minute (Cadence)',
+                        'Target Stride Cadence',
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -432,13 +467,14 @@ class HomePage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        'Recommended for Your BMI:',
+                        'Scientific Targets for Your Profile:',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
+                          fontWeight: FontWeight.w500,
                           color: theme.colorScheme.secondary,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -456,7 +492,7 @@ class HomePage extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
               _buildSoundSelector(context, ref),
-              const SizedBox(height: 80),
+              const SizedBox(height: 100),
             ],
           ),
         ),
@@ -464,18 +500,19 @@ class HomePage extends ConsumerWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           if (!appState.isPlaying) {
+            // Prime the browser audio context
             await audioService.play(appState.sound);
           }
           stateService.togglePlay();
         },
         label: Text(
-          appState.isPlaying ? 'Pause' : 'Play Steps',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
+          appState.isPlaying ? 'PAUSE' : 'PLAY STEPS',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 1.2),
         ),
-        icon: Icon(appState.isPlaying ? Icons.pause : Icons.play_arrow),
+        icon: Icon(appState.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,
-        elevation: 8,
+        elevation: 12,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
@@ -487,14 +524,15 @@ class HomePage extends ConsumerWidget {
         Text(
           label,
           style: GoogleFonts.poppins(
-            fontSize: 12,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
             color: theme.colorScheme.secondary,
           ),
         ),
         Text(
           value,
           style: GoogleFonts.poppins(
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: theme.colorScheme.primary,
           ),
@@ -514,12 +552,18 @@ class HomePage extends ConsumerWidget {
     return ElevatedButton(
       onPressed: () => service.setBpm(value),
       style: ElevatedButton.styleFrom(
-        backgroundColor: isSelected ? theme.colorScheme.primary : theme.colorScheme.surface,
-        foregroundColor: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
-        elevation: isSelected ? 4 : 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        backgroundColor: isSelected ? theme.colorScheme.primary : theme.colorScheme.surfaceVariant,
+        foregroundColor: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+        elevation: isSelected ? 6 : 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      child: Text('$label ($value)'),
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          Text('$value spm', style: const TextStyle(fontSize: 10)),
+        ],
+      ),
     );
   }
 
@@ -550,30 +594,27 @@ class HomePage extends ConsumerWidget {
         : 'heel_strike';
 
     return Card(
-      elevation: 8,
+      elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Step Sound Effect',
+              'Environment Sound',
               style: GoogleFonts.poppins(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.secondary,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: currentSound,
                 isExpanded: true,
-                icon: Icon(
-                  Icons.arrow_drop_down_circle,
-                  color: theme.colorScheme.primary,
-                ),
+                icon: Icon(Icons.tune, color: theme.colorScheme.primary),
                 items: soundOptions.map((opt) {
                   return _buildDropdownItem(opt['label']!, opt['value']!);
                 }).toList(),
@@ -583,11 +624,8 @@ class HomePage extends ConsumerWidget {
                     await audioService.play(value);
                   }
                 },
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  color: theme.colorScheme.onSurface,
-                ),
-                dropdownColor: theme.cardColor,
+                style: GoogleFonts.poppins(fontSize: 16, color: theme.colorScheme.onSurface),
+                dropdownColor: theme.colorScheme.surface,
               ),
             ),
           ],
