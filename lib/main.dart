@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/foundation.dart'; // Add for kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,7 +38,6 @@ class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   AudioService() {
-    // Initial setup for web if needed
     if (kIsWeb) {
       _audioPlayer.setReleaseMode(ReleaseMode.stop);
     }
@@ -46,7 +45,6 @@ class AudioService {
 
   Future<void> play(String soundKey) async {
     String soundFile;
-    // Map the selection keys to the available audio files
     switch (soundKey) {
       case 'heel_strike':
         soundFile = 'step1.mp3';
@@ -59,23 +57,11 @@ class AudioService {
     }
 
     try {
-      developer.log('Attempting to play: assets/audio/$soundFile', name: 'AudioService');
-      await _audioPlayer.play(AssetSource('audio/$soundFile'));
-    } on PlatformException catch (e) {
-      developer.log(
-        'Error playing audio: $soundFile ($soundKey)',
-        name: 'AudioService',
-        level: 900,
-        error: e,
-      );
-    } catch (e, s) {
-      developer.log(
-        'An unexpected error occurred while playing audio: $soundFile ($soundKey)',
-        name: 'AudioService',
-        level: 1000,
-        error: e,
-        stackTrace: s,
-      );
+      // On web, it's better to stop any current sound before restarting for metronome precision
+      await _audioPlayer.stop();
+      await _audioPlayer.play(AssetSource('audio/$soundFile'), volume: 1.0);
+    } catch (e) {
+      developer.log('Playback error: $e', name: 'AudioService', level: 1000);
     }
   }
 
@@ -197,6 +183,9 @@ class BPMService {
   void start() {
     _timer?.cancel();
     if (_appState.isPlaying) {
+      // Play immediately to prime the browser and give instant feedback
+      _audioService.play(_appState.sound);
+      
       _timer = Timer.periodic(Duration(milliseconds: 60000 ~/ _appState.bpm), (
         _,
       ) {
@@ -219,6 +208,7 @@ class MyApp extends ConsumerWidget {
     final themeProviderState = ref.watch(themeProvider);
     return MaterialApp(
       title: 'StepWithMe',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -255,9 +245,11 @@ class HomePage extends ConsumerWidget {
     final appState = ref.watch(stateServiceProvider);
     final stateService = ref.read(stateServiceProvider.notifier);
     final bpmService = ref.read(bpmServiceProvider);
+    final audioService = ref.read(audioServiceProvider);
 
-    ref.listen<AppState>(stateServiceProvider, (previous, next) {
-      if (next.isPlaying) {
+    // Watch for play/pause changes
+    ref.listen<bool>(stateServiceProvider.select((s) => s.isPlaying), (prev, next) {
+      if (next) {
         bpmService.start();
       } else {
         bpmService.stop();
@@ -405,34 +397,10 @@ class HomePage extends ConsumerWidget {
                         runSpacing: 8,
                         alignment: WrapAlignment.center,
                         children: [
-                          _buildModeButton(
-                            'Light',
-                            100,
-                            stateService,
-                            theme,
-                            appState.bpm,
-                          ),
-                          _buildModeButton(
-                            'Fat Burn',
-                            120,
-                            stateService,
-                            theme,
-                            appState.bpm,
-                          ),
-                          _buildModeButton(
-                            'Jogging',
-                            150,
-                            stateService,
-                            theme,
-                            appState.bpm,
-                          ),
-                          _buildModeButton(
-                            'Running',
-                            170,
-                            stateService,
-                            theme,
-                            appState.bpm,
-                          ),
+                          _buildModeButton('Light', 100, stateService, theme, appState.bpm),
+                          _buildModeButton('Fat Burn', 120, stateService, theme, appState.bpm),
+                          _buildModeButton('Jogging', 150, stateService, theme, appState.bpm),
+                          _buildModeButton('Running', 170, stateService, theme, appState.bpm),
                         ],
                       ),
                     ],
@@ -447,7 +415,12 @@ class HomePage extends ConsumerWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
+        onPressed: () async {
+          // KEY FIX: Play a sound immediately here! 
+          // This happens directly in the click event, which unlocks audio on browsers.
+          if (!appState.isPlaying) {
+            await audioService.play(appState.sound);
+          }
           stateService.togglePlay();
         },
         label: Text(
@@ -524,10 +497,7 @@ class HomePage extends ConsumerWidget {
       {'label': 'Forest Walk', 'value': 'walking_in_forest.mp3'},
       {'label': 'Gravel Path', 'value': 'walking_on_gravel_path.mp3'},
       {'label': 'Wood Floor', 'value': 'walking_wood_floor.mp3'},
-      {
-        'label': 'Water Walk (Sweetener)',
-        'value': 'water_walk_sweetener.mp3',
-      },
+      {'label': 'Water Walk (Sweetener)', 'value': 'water_walk_sweetener.mp3'},
     ];
 
     final currentSound = soundOptions.any((opt) => opt['value'] == appState.sound)
@@ -562,10 +532,11 @@ class HomePage extends ConsumerWidget {
                 items: soundOptions.map((opt) {
                   return _buildDropdownItem(opt['label']!, opt['value']!);
                 }).toList(),
-                onChanged: (value) {
+                onChanged: (value) async {
                   if (value != null) {
                     stateService.setSound(value);
-                    audioService.play(value);
+                    // Preview also counts as a user gesture
+                    await audioService.play(value);
                   }
                 },
                 style: GoogleFonts.poppins(
