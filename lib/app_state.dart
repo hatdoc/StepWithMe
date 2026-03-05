@@ -96,7 +96,7 @@ class AppState {
 class StateService extends StateNotifier<AppState> {
   bool _isLoading = true;
 
-  StateService() : super(AppState(bpm: 120, isPlaying: false, sound: 'heel_strike')) {
+  StateService() : super(AppState(bpm: 120, isPlaying: false, sound: 'walk_on_grass.mp3')) {
     _loadState();
   }
 
@@ -108,7 +108,7 @@ class StateService extends StateNotifier<AppState> {
 
     final newState = AppState(
       bpm: prefs.getInt('bpm') ?? 120,
-      sound: prefs.getString('sound') ?? 'heel_strike',
+      sound: prefs.getString('sound') ?? 'walk_on_grass.mp3',
       height: hStr != null ? double.tryParse(hStr.replaceAll(',', '.')) : null,
       weight: wStr != null ? double.tryParse(wStr.replaceAll(',', '.')) : null,
       age: aStr != null ? int.tryParse(aStr) : null,

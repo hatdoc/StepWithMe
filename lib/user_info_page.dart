@@ -155,7 +155,7 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: theme.colorScheme.outline.withOpacity(0.3)),
+          borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

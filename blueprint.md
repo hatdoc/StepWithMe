@@ -30,6 +30,19 @@ StepWithMe is a fitness-focused mobile and web application designed to optimize 
 3.  **State Management:**
     *   `flutter_riverpod` manages the global state, ensuring that changing user profile data (height/weight/age) triggers an immediate recalculation of all recommended targets.
 
+## Recent Improvements (March 5, 2026)
+
+### Bug Fixes & Stabilization
+*   **Audio Context Compatibility:** Resolved `audioplayers` v6.6.0 compilation errors by removing invalid `const` constructors for `AudioContext` and `AudioContextIOS`. Fixed parameter misalignment for `AudioContextAndroid`.
+*   **Asset Management:** Simplified `pubspec.yaml` asset declaration by including the entire `assets/audio/` directory. Removed references to missing placeholder files like `step1.mp3`.
+*   **Default State:** Updated `StateService` to use a valid default sound file (`walk_on_grass.mp3`) that matches the provided high-quality audio assets.
+*   **Deprecated API Updates:** Refactored `withOpacity` to `withValues(alpha: ...)` to align with the latest Flutter 3.27+ standards and avoid precision loss.
+
+### UI/UX & Code Quality
+*   **Code Cleanup:** Removed unused helper methods (`_buildDropdownItem`) and resolved all linter warnings.
+*   **Robust Initialization:** Improved `InitialPage` logic for consistent user profile checking.
+*   **Sound Selection:** Enhanced the sound selector to dynamically map friendly labels to the new high-quality audio files.
+
 ## Git & Workflow Policy
 
 *   All changes are pushed directly to the `master` branch.

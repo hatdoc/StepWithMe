@@ -26,16 +26,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/audio/step1.mp3
-    - assets/audio/step2.mp3
-    - assets/audio/walk_in_shallow_water.mp3
-    - assets/audio/walk_on_grass.mp3
-    - assets/audio/walk_on_muddy_gravel.mp3
-    - assets/audio/walk_on_rocks.mp3
-    - assets/audio/walk_on_snow.mp3
-    - assets/audio/walk_on_solid_metal.mp3
-    - assets/audio/walk_on_tile.mp3
-    - assets/audio/walking_in_forest.mp3
-    - assets/audio/walking_on_gravel_path.mp3
-    - assets/audio/walking_wood_floor.mp3
-    - assets/audio/water_walk_sweetener.mp3
+    - assets/audio/

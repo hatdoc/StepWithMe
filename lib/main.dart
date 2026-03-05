@@ -44,30 +44,37 @@ class AudioService {
     if (kIsWeb) {
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
     }
+    // Set audio context for background playback if possible
+    await _audioPlayer.setAudioContext(AudioContext(
+      android: const AudioContextAndroid(
+        usageType: AndroidUsageType.assistanceSonification,
+        contentType: AndroidContentType.sonification,
+        audioFocus: AndroidAudioFocus.none,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playback,
+        options: const {
+          AVAudioSessionOptions.mixWithOthers,
+          AVAudioSessionOptions.duckOthers,
+        },
+      ),
+    ));
     _isInitialized = true;
   }
 
-  Future<void> play(String soundKey) async {
+  Future<void> play(String soundFile) async {
     if (!_isInitialized) await _init();
 
-    String soundFile;
-    switch (soundKey) {
-      case 'heel_strike':
-        soundFile = 'walking_wood_floor.mp3';
-        break;
-      case 'soft_sneaker':
-        soundFile = 'walking_in_forest.mp3';
-        break;
-      default:
-        soundFile = soundKey;
-    }
+    // Use default if mapping is needed, but now we use filenames directly
+    String assetPath = soundFile;
+    if (soundFile == 'heel_strike') assetPath = 'walking_wood_floor.mp3';
+    if (soundFile == 'soft_sneaker') assetPath = 'walking_in_forest.mp3';
 
     try {
       await _audioPlayer.stop();
-      // On web, AssetSource should be just the filename inside assets/audio/ registered in pubspec
-      await _audioPlayer.play(AssetSource('audio/$soundFile'), volume: 1.0);
+      await _audioPlayer.play(AssetSource('audio/$assetPath'), volume: 1.0);
     } catch (e) {
-      developer.log('Playback error for $soundFile: $e', name: 'AudioService', level: 1000);
+      developer.log('Playback error for $assetPath: $e', name: 'AudioService', level: 1000);
     }
   }
 
@@ -80,6 +87,14 @@ final bpmServiceProvider = Provider((ref) {
   final audioService = ref.watch(audioServiceProvider);
   final appState = ref.watch(stateServiceProvider);
   final service = BPMService(audioService, appState);
+  
+  // Auto-start if it was already playing when state changed
+  if (appState.isPlaying) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      service.start();
+    });
+  }
+  
   ref.onDispose(() => service.stop());
   return service;
 });
@@ -93,14 +108,15 @@ class BPMService {
 
   void start() {
     _timer?.cancel();
-    if (_appState.isPlaying) {
+    if (_appState.bpm <= 0) return;
+    
+    // Play the first step immediately
+    _audioService.play(_appState.sound);
+    
+    final interval = Duration(milliseconds: 60000 ~/ _appState.bpm);
+    _timer = Timer.periodic(interval, (_) {
       _audioService.play(_appState.sound);
-      _timer = Timer.periodic(Duration(milliseconds: 60000 ~/ _appState.bpm), (
-        _,
-      ) {
-        _audioService.play(_appState.sound);
-      });
-    }
+    });
   }
 
   void stop() {
@@ -278,7 +294,7 @@ class HomePage extends ConsumerWidget {
                         },
                         appearance: CircularSliderAppearance(
                           customColors: CustomSliderColors(
-                            trackColor: theme.colorScheme.secondary.withOpacity(0.2),
+                            trackColor: theme.colorScheme.secondary.withValues(alpha: 0.2),
                             progressBarColor: theme.colorScheme.primary,
                             dotColor: theme.colorScheme.primary,
                           ),
@@ -417,67 +433,86 @@ class HomePage extends ConsumerWidget {
     final audioService = ref.read(audioServiceProvider);
 
     final soundOptions = [
-      {'label': 'Heel Strike (Default)', 'value': 'heel_strike'},
-      {'label': 'Soft Sneaker', 'value': 'soft_sneaker'},
-      {'label': 'Shallow Water', 'value': 'walk_in_shallow_water.mp3'},
-      {'label': 'Grass', 'value': 'walk_on_grass.mp3'},
-      {'label': 'Muddy Gravel', 'value': 'walk_on_muddy_gravel.mp3'},
-      {'label': 'Rocks', 'value': 'walk_on_rocks.mp3'},
-      {'label': 'Snow', 'value': 'walk_on_snow.mp3'},
-      {'label': 'Solid Metal', 'value': 'walk_on_solid_metal.mp3'},
-      {'label': 'Tile', 'value': 'walk_on_tile.mp3'},
-      {'label': 'Forest Walk', 'value': 'walking_in_forest.mp3'},
-      {'label': 'Gravel Path', 'value': 'walking_on_gravel_path.mp3'},
-      {'label': 'Wood Floor', 'value': 'walking_wood_floor.mp3'},
-      {'label': 'Water Walk (Sweetener)', 'value': 'water_walk_sweetener.mp3'},
+      {'label': 'Grass 🌿', 'value': 'walk_on_grass.mp3'},
+      {'label': 'Forest 🌲', 'value': 'walking_in_forest.mp3'},
+      {'label': 'Gravel Path 🪨', 'value': 'walking_on_gravel_path.mp3'},
+      {'label': 'Rock 🪨', 'value': 'walk_on_rocks.mp3'},
+      {'label': 'Snow ❄️', 'value': 'walk_on_snow.mp3'},
+      {'label': 'Tile 🧱', 'value': 'walk_on_tile.mp3'},
+      {'label': 'Wood Floor 🪵', 'value': 'walking_wood_floor.mp3'},
+      {'label': 'Solid Metal ⚙️', 'value': 'walk_on_solid_metal.mp3'},
+      {'label': 'Shallow Water 💧', 'value': 'walk_in_shallow_water.mp3'},
+      {'label': 'Muddy Gravel 🪨', 'value': 'walk_on_muddy_gravel.mp3'},
     ];
 
+    // Ensure current sound is valid or default to grass
     final currentSound = soundOptions.any((opt) => opt['value'] == appState.sound)
         ? appState.sound
-        : 'heel_strike';
+        : 'walk_on_grass.mp3';
 
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Environment Sound',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary,
-              ),
+            Row(
+              children: [
+                Icon(Icons.terrain, color: theme.colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Choose Footstep Sound',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.secondary,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: currentSound,
-                isExpanded: true,
-                icon: Icon(Icons.tune, color: theme.colorScheme.primary),
-                items: soundOptions.map((opt) {
-                  return _buildDropdownItem(opt['label']!, opt['value']!);
-                }).toList(),
-                onChanged: (value) async {
-                  if (value != null) {
-                    stateService.setSound(value);
-                    await audioService.play(value);
-                  }
-                },
-                style: GoogleFonts.poppins(fontSize: 16, color: theme.colorScheme.onSurface),
-                dropdownColor: theme.colorScheme.surface,
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: currentSound,
+                  isExpanded: true,
+                  icon: Icon(Icons.keyboard_arrow_down, color: theme.colorScheme.primary),
+                  items: soundOptions.map((opt) {
+                    return DropdownMenuItem<String>(
+                      value: opt['value'],
+                      child: Text(
+                        opt['label']!,
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) async {
+                    if (value != null) {
+                      stateService.setSound(value);
+                      // Preview sound when selected
+                      if (!appState.isPlaying) {
+                        await audioService.play(value);
+                      }
+                    }
+                  },
+                  dropdownColor: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  DropdownMenuItem<String> _buildDropdownItem(String text, String value) {
-    return DropdownMenuItem(value: value, child: Text(text));
   }
 }
