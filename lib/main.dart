@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:developer' as developer; // Add this import
+import 'dart:developer' as developer;
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart'; // Add for kIsWeb
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Add this import
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,6 +37,13 @@ final audioServiceProvider = Provider((ref) => AudioService());
 class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
+  AudioService() {
+    // Initial setup for web if needed
+    if (kIsWeb) {
+      _audioPlayer.setReleaseMode(ReleaseMode.stop);
+    }
+  }
+
   Future<void> play(String soundKey) async {
     String soundFile;
     // Map the selection keys to the available audio files
@@ -46,21 +54,12 @@ class AudioService {
       case 'soft_sneaker':
         soundFile = 'step2.mp3';
         break;
-      case 'wood_block':
-        soundFile = 'step1.mp3';
-        break;
-      case 'mechanical_click':
-        soundFile = 'step2.mp3';
-        break;
-      case 'electronic_pulse':
-        soundFile = 'step1.mp3';
-        break;
       default:
-        // For new files, the key is the filename itself
         soundFile = soundKey;
     }
 
     try {
+      developer.log('Attempting to play: assets/audio/$soundFile', name: 'AudioService');
       await _audioPlayer.play(AssetSource('audio/$soundFile'));
     } on PlatformException catch (e) {
       developer.log(
@@ -92,7 +91,7 @@ final stateServiceProvider = StateNotifierProvider<StateService, AppState>(
 class AppState {
   final int bpm;
   final bool isPlaying;
-  final String sound; // This now stores the unique sound key
+  final String sound;
   final double? height;
   final double? weight;
   final int? age;
@@ -196,7 +195,7 @@ class BPMService {
   BPMService(this._audioService, this._appState);
 
   void start() {
-    _timer?.cancel(); // Cancel any existing timer
+    _timer?.cancel();
     if (_appState.isPlaying) {
       _timer = Timer.periodic(Duration(milliseconds: 60000 ~/ _appState.bpm), (
         _,
@@ -515,19 +514,19 @@ class HomePage extends ConsumerWidget {
     final soundOptions = [
       {'label': 'Heel Strike (Default)', 'value': 'heel_strike'},
       {'label': 'Soft Sneaker', 'value': 'soft_sneaker'},
-      {'label': 'Shallow Water', 'value': 'Walk in Shallow Water Series.mp3'},
-      {'label': 'Grass', 'value': 'Walk on Grass Series.mp3'},
-      {'label': 'Muddy Gravel', 'value': 'Walk on Muddy Gravel Series.mp3'},
-      {'label': 'Rocks', 'value': 'Walk on Rocks.mp3'},
-      {'label': 'Snow', 'value': 'Walk on Snow Series.mp3'},
-      {'label': 'Solid Metal', 'value': 'Walk on Solid Metal Series.mp3'},
-      {'label': 'Tile', 'value': 'Walk on Tile Series.mp3'},
-      {'label': 'Forest Walk', 'value': 'Walking In Forest.mp3'},
-      {'label': 'Gravel Path', 'value': 'Walking On Gravel Path.mp3'},
-      {'label': 'Wood Floor', 'value': 'Walking Wood Floor House.mp3'},
+      {'label': 'Shallow Water', 'value': 'walk_in_shallow_water.mp3'},
+      {'label': 'Grass', 'value': 'walk_on_grass.mp3'},
+      {'label': 'Muddy Gravel', 'value': 'walk_on_muddy_gravel.mp3'},
+      {'label': 'Rocks', 'value': 'walk_on_rocks.mp3'},
+      {'label': 'Snow', 'value': 'walk_on_snow.mp3'},
+      {'label': 'Solid Metal', 'value': 'walk_on_solid_metal.mp3'},
+      {'label': 'Tile', 'value': 'walk_on_tile.mp3'},
+      {'label': 'Forest Walk', 'value': 'walking_in_forest.mp3'},
+      {'label': 'Gravel Path', 'value': 'walking_on_gravel_path.mp3'},
+      {'label': 'Wood Floor', 'value': 'walking_wood_floor.mp3'},
       {
         'label': 'Water Walk (Sweetener)',
-        'value': 'Water Walk Series Sweetener .mp3',
+        'value': 'water_walk_sweetener.mp3',
       },
     ];
 
