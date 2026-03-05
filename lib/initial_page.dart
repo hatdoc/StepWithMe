@@ -19,8 +19,9 @@ class _InitialPageState extends State<InitialPage> {
     final prefs = await SharedPreferences.getInstance();
     final height = prefs.getString('height');
     final weight = prefs.getString('weight');
+    final age = prefs.getString('age');
 
-    if (height != null && weight != null) {
+    if (height != null && weight != null && age != null) {
       Navigator.of(context).pushReplacementNamed('/home');
     } else {
       Navigator.of(context).pushReplacementNamed('/user-info');

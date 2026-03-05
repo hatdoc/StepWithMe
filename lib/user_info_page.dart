@@ -12,6 +12,7 @@ class UserInfoPage extends StatefulWidget {
 class _UserInfoPageState extends State<UserInfoPage> {
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
+  final _ageController = TextEditingController();
 
   @override
   void initState() {
@@ -24,6 +25,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
     setState(() {
       _heightController.text = prefs.getString('height') ?? '';
       _weightController.text = prefs.getString('weight') ?? '';
+      _ageController.text = prefs.getString('age') ?? '';
     });
   }
 
@@ -31,6 +33,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
   void dispose() {
     _heightController.dispose();
     _weightController.dispose();
+    _ageController.dispose();
     super.dispose();
   }
 
@@ -38,6 +41,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('height', _heightController.text);
     await prefs.setString('weight', _weightController.text);
+    await prefs.setString('age', _ageController.text);
     Navigator.of(context).pushReplacementNamed('/home');
   }
 
@@ -63,7 +67,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Let\'s get to know you a little better.',
+                'Enter your details to calculate your personal targets.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 16,
@@ -71,6 +75,12 @@ class _UserInfoPageState extends State<UserInfoPage> {
                 ),
               ),
               const SizedBox(height: 48),
+              _buildTextField(
+                controller: _ageController,
+                labelText: 'Age',
+                icon: Icons.calendar_today,
+              ),
+              const SizedBox(height: 24),
               _buildTextField(
                 controller: _heightController,
                 labelText: 'Height (cm)',
@@ -93,7 +103,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
                   backgroundColor: theme.colorScheme.primary,
                 ),
                 child: Text(
-                  'Save and Continue',
+                  'Start My Journey',
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,

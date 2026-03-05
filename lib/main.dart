@@ -26,9 +26,7 @@ class ThemeProvider with ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.light
-        ? ThemeMode.dark
-        : ThemeMode.light;
+    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
 }
@@ -95,29 +93,69 @@ class AppState {
   final int bpm;
   final bool isPlaying;
   final String sound; // This now stores the unique sound key
+  final double? height;
+  final double? weight;
+  final int? age;
 
-  AppState({required this.bpm, required this.isPlaying, required this.sound});
+  AppState({
+    required this.bpm,
+    required this.isPlaying,
+    required this.sound,
+    this.height,
+    this.weight,
+    this.age,
+  });
 
-  AppState copyWith({int? bpm, bool? isPlaying, String? sound}) {
+  AppState copyWith({
+    int? bpm,
+    bool? isPlaying,
+    String? sound,
+    double? height,
+    double? weight,
+    int? age,
+  }) {
     return AppState(
       bpm: bpm ?? this.bpm,
       isPlaying: isPlaying ?? this.isPlaying,
       sound: sound ?? this.sound,
+      height: height ?? this.height,
+      weight: weight ?? this.weight,
+      age: age ?? this.age,
     );
+  }
+
+  double? get bmi {
+    if (height == null || weight == null || height == 0) return null;
+    return weight! / ((height! / 100) * (height! / 100));
+  }
+
+  String get bmiCategory {
+    final val = bmi;
+    if (val == null) return 'Unknown';
+    if (val < 18.5) return 'Underweight';
+    if (val < 25) return 'Healthy';
+    if (val < 30) return 'Overweight';
+    return 'Obese';
   }
 }
 
 class StateService extends StateNotifier<AppState> {
-  StateService()
-    : super(AppState(bpm: 120, isPlaying: false, sound: 'heel_strike')) {
+  StateService() : super(AppState(bpm: 120, isPlaying: false, sound: 'heel_strike')) {
     _loadState();
   }
 
   Future<void> _loadState() async {
     final prefs = await SharedPreferences.getInstance();
+    final hStr = prefs.getString('height');
+    final wStr = prefs.getString('weight');
+    final aStr = prefs.getString('age');
+
     state = state.copyWith(
       bpm: prefs.getInt('bpm') ?? 120,
       sound: prefs.getString('sound') ?? 'heel_strike',
+      height: hStr != null ? double.tryParse(hStr) : null,
+      weight: wStr != null ? double.tryParse(wStr) : null,
+      age: aStr != null ? int.tryParse(aStr) : null,
     );
   }
 
@@ -215,15 +253,10 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-
     final appState = ref.watch(stateServiceProvider);
-
     final stateService = ref.read(stateServiceProvider.notifier);
-
     final bpmService = ref.read(bpmServiceProvider);
 
-    // Start/stop BPM service based on appState.isPlaying
-    // Use ref.listen to handle side effects like starting/stopping the BPM service
     ref.listen<AppState>(stateServiceProvider, (previous, next) {
       if (next.isPlaying) {
         bpmService.start();
@@ -231,6 +264,10 @@ class HomePage extends ConsumerWidget {
         bpmService.stop();
       }
     });
+
+    final maxHR = appState.age != null ? 220 - appState.age! : 0;
+    final fatBurnMin = (maxHR * 0.60).toInt();
+    final fatBurnMax = (maxHR * 0.70).toInt();
 
     return Scaffold(
       appBar: AppBar(
@@ -254,13 +291,50 @@ class HomePage extends ConsumerWidget {
         backgroundColor: theme.scaffoldBackgroundColor,
         foregroundColor: theme.colorScheme.onSurface,
       ),
-      body: Center(
+      body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildStatItem(
+                            'BMI',
+                            appState.bmi?.toStringAsFixed(1) ?? '--',
+                            theme,
+                          ),
+                          _buildStatItem(
+                            'Category',
+                            appState.bmiCategory,
+                            theme,
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 32),
+                      Text(
+                        'Target Fat Loss Heart Rate: $fatBurnMin - $fatBurnMax BPM',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
               Card(
                 elevation: 8,
                 shape: RoundedRectangleBorder(
@@ -271,7 +345,7 @@ class HomePage extends ConsumerWidget {
                   child: Column(
                     children: [
                       Text(
-                        'Beats Per Minute',
+                        'Steps Per Minute (Cadence)',
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -288,21 +362,31 @@ class HomePage extends ConsumerWidget {
                         },
                         innerWidget: (double value) {
                           return Center(
-                            child: Text(
-                              '${value.toInt()}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 48,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '${value.toInt()}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 48,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                                Text(
+                                  'Steps/Min',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: theme.colorScheme.secondary,
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },
                         appearance: CircularSliderAppearance(
                           customColors: CustomSliderColors(
-                            trackColor: theme.colorScheme.secondary.withOpacity(
-                              0.2,
-                            ),
+                            trackColor: theme.colorScheme.secondary.withOpacity(0.2),
                             progressBarColor: theme.colorScheme.primary,
                             dotColor: theme.colorScheme.primary,
                           ),
@@ -311,60 +395,121 @@ class HomePage extends ConsumerWidget {
                             progressBarWidth: 12,
                             handlerSize: 8,
                           ),
-                          size: 250,
+                          size: 200,
                           startAngle: 180,
                           angleRange: 360,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          stateService.setBpm(120);
-                        },
-                        child: const Text('Recommend Speed'),
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          _buildModeButton(
+                            'Light',
+                            100,
+                            stateService,
+                            theme,
+                            appState.bpm,
+                          ),
+                          _buildModeButton(
+                            'Fat Burn',
+                            120,
+                            stateService,
+                            theme,
+                            appState.bpm,
+                          ),
+                          _buildModeButton(
+                            'Jogging',
+                            150,
+                            stateService,
+                            theme,
+                            appState.bpm,
+                          ),
+                          _buildModeButton(
+                            'Running',
+                            170,
+                            stateService,
+                            theme,
+                            appState.bpm,
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               _buildSoundSelector(context, ref),
+              const SizedBox(height: 80),
             ],
           ),
         ),
       ),
-
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           stateService.togglePlay();
         },
-
         label: Text(
-          appState.isPlaying ? 'Pause' : 'Play',
-
+          appState.isPlaying ? 'Pause' : 'Play Steps',
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-
         icon: Icon(appState.isPlaying ? Icons.pause : Icons.play_arrow),
-
         backgroundColor: theme.colorScheme.primary,
-
         foregroundColor: theme.colorScheme.onPrimary,
-
         elevation: 8,
       ),
-
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, ThemeData theme) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: theme.colorScheme.secondary,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeButton(
+    String label,
+    int value,
+    StateService service,
+    ThemeData theme,
+    int currentBpm,
+  ) {
+    final isSelected = currentBpm == value;
+    return ElevatedButton(
+      onPressed: () => service.setBpm(value),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isSelected ? theme.colorScheme.primary : theme.colorScheme.surface,
+        foregroundColor: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface,
+        elevation: isSelected ? 4 : 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      child: Text(label),
     );
   }
 
   Widget _buildSoundSelector(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-
     final appState = ref.watch(stateServiceProvider);
-
     final stateService = ref.read(stateServiceProvider.notifier);
-
     final audioService = ref.read(audioServiceProvider);
 
     final soundOptions = [
@@ -380,22 +525,21 @@ class HomePage extends ConsumerWidget {
       {'label': 'Forest Walk', 'value': 'Walking In Forest.mp3'},
       {'label': 'Gravel Path', 'value': 'Walking On Gravel Path.mp3'},
       {'label': 'Wood Floor', 'value': 'Walking Wood Floor House.mp3'},
-      {'label': 'Water Walk (Sweetener)', 'value': 'Water Walk Series Sweetener .mp3'},
+      {
+        'label': 'Water Walk (Sweetener)',
+        'value': 'Water Walk Series Sweetener .mp3',
+      },
     ];
 
-    // Ensure the current sound value exists in the options to avoid AssertionError
     final currentSound = soundOptions.any((opt) => opt['value'] == appState.sound)
         ? appState.sound
         : 'heel_strike';
 
     return Card(
       elevation: 8,
-
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -411,32 +555,24 @@ class HomePage extends ConsumerWidget {
             DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: currentSound,
-
                 isExpanded: true,
-
                 icon: Icon(
                   Icons.arrow_drop_down_circle,
                   color: theme.colorScheme.primary,
                 ),
-
                 items: soundOptions.map((opt) {
                   return _buildDropdownItem(opt['label']!, opt['value']!);
                 }).toList(),
-
                 onChanged: (value) {
                   if (value != null) {
                     stateService.setSound(value);
-                    // Preview the sound when selected
                     audioService.play(value);
                   }
                 },
-
                 style: GoogleFonts.poppins(
                   fontSize: 18,
-
                   color: theme.colorScheme.onSurface,
                 ),
-
                 dropdownColor: theme.cardColor,
               ),
             ),
