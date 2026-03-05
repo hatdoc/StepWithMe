@@ -47,17 +47,17 @@ class AudioService {
     String soundFile;
     switch (soundKey) {
       case 'heel_strike':
-        soundFile = 'step1.mp3';
+        soundFile = 'walking_wood_floor.mp3'; // Using a real file as default
         break;
       case 'soft_sneaker':
-        soundFile = 'step2.mp3';
+        soundFile = 'walking_in_forest.mp3'; // Using a real file as default
         break;
       default:
         soundFile = soundKey;
     }
 
     try {
-      // On web, it's better to stop any current sound before restarting for metronome precision
+      // For precision, especially on web, we ensure the player is ready
       await _audioPlayer.stop();
       await _audioPlayer.play(AssetSource('audio/$soundFile'), volume: 1.0);
     } catch (e) {
@@ -122,6 +122,35 @@ class AppState {
     if (val < 30) return 'Overweight';
     return 'Obese';
   }
+
+  // Recommended speeds based on BMI and Age
+  int get recommendedLight {
+    final category = bmiCategory;
+    if (category == 'Obese') return 90;
+    if (category == 'Overweight') return 100;
+    return 110;
+  }
+
+  int get recommendedFatBurn {
+    final category = bmiCategory;
+    if (category == 'Obese') return 110;
+    if (category == 'Overweight') return 120;
+    return 130;
+  }
+
+  int get recommendedJogging {
+    final category = bmiCategory;
+    if (category == 'Obese') return 130;
+    if (category == 'Overweight') return 140;
+    return 150;
+  }
+
+  int get recommendedRunning {
+    final category = bmiCategory;
+    if (category == 'Obese') return 150;
+    if (category == 'Overweight') return 160;
+    return 170;
+  }
 }
 
 class StateService extends StateNotifier<AppState> {
@@ -141,6 +170,19 @@ class StateService extends StateNotifier<AppState> {
       height: hStr != null ? double.tryParse(hStr) : null,
       weight: wStr != null ? double.tryParse(wStr) : null,
       age: aStr != null ? int.tryParse(aStr) : null,
+    );
+  }
+
+  Future<void> updateUserInfo({required String height, required String weight, required String age}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('height', height);
+    await prefs.setString('weight', weight);
+    await prefs.setString('age', age);
+    
+    state = state.copyWith(
+      height: double.tryParse(height),
+      weight: double.tryParse(weight),
+      age: int.tryParse(age),
     );
   }
 
@@ -183,9 +225,7 @@ class BPMService {
   void start() {
     _timer?.cancel();
     if (_appState.isPlaying) {
-      // Play immediately to prime the browser and give instant feedback
       _audioService.play(_appState.sound);
-      
       _timer = Timer.periodic(Duration(milliseconds: 60000 ~/ _appState.bpm), (
         _,
       ) {
@@ -247,7 +287,6 @@ class HomePage extends ConsumerWidget {
     final bpmService = ref.read(bpmServiceProvider);
     final audioService = ref.read(audioServiceProvider);
 
-    // Watch for play/pause changes
     ref.listen<bool>(stateServiceProvider.select((s) => s.isPlaying), (prev, next) {
       if (next) {
         bpmService.start();
@@ -392,15 +431,23 @@ class HomePage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      Text(
+                        'Recommended for Your BMI:',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         alignment: WrapAlignment.center,
                         children: [
-                          _buildModeButton('Light', 100, stateService, theme, appState.bpm),
-                          _buildModeButton('Fat Burn', 120, stateService, theme, appState.bpm),
-                          _buildModeButton('Jogging', 150, stateService, theme, appState.bpm),
-                          _buildModeButton('Running', 170, stateService, theme, appState.bpm),
+                          _buildModeButton('Light', appState.recommendedLight, stateService, theme, appState.bpm),
+                          _buildModeButton('Fat Burn', appState.recommendedFatBurn, stateService, theme, appState.bpm),
+                          _buildModeButton('Jogging', appState.recommendedJogging, stateService, theme, appState.bpm),
+                          _buildModeButton('Running', appState.recommendedRunning, stateService, theme, appState.bpm),
                         ],
                       ),
                     ],
@@ -416,8 +463,6 @@ class HomePage extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          // KEY FIX: Play a sound immediately here! 
-          // This happens directly in the click event, which unlocks audio on browsers.
           if (!appState.isPlaying) {
             await audioService.play(appState.sound);
           }
@@ -474,7 +519,7 @@ class HomePage extends ConsumerWidget {
         elevation: isSelected ? 4 : 1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
-      child: Text(label),
+      child: Text('$label ($value)'),
     );
   }
 
@@ -535,7 +580,6 @@ class HomePage extends ConsumerWidget {
                 onChanged: (value) async {
                   if (value != null) {
                     stateService.setSound(value);
-                    // Preview also counts as a user gesture
                     await audioService.play(value);
                   }
                 },

@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:myapp/main.dart';
 
-class UserInfoPage extends StatefulWidget {
+class UserInfoPage extends ConsumerStatefulWidget {
   const UserInfoPage({super.key});
 
   @override
-  State<UserInfoPage> createState() => _UserInfoPageState();
+  ConsumerState<UserInfoPage> createState() => _UserInfoPageState();
 }
 
-class _UserInfoPageState extends State<UserInfoPage> {
+class _UserInfoPageState extends ConsumerState<UserInfoPage> {
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
   final _ageController = TextEditingController();
@@ -17,15 +18,12 @@ class _UserInfoPageState extends State<UserInfoPage> {
   @override
   void initState() {
     super.initState();
-    _loadUserInfo();
-  }
-
-  Future<void> _loadUserInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _heightController.text = prefs.getString('height') ?? '';
-      _weightController.text = prefs.getString('weight') ?? '';
-      _ageController.text = prefs.getString('age') ?? '';
+    // Load existing data into controllers
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = ref.read(stateServiceProvider);
+      if (state.height != null) _heightController.text = state.height!.toString();
+      if (state.weight != null) _weightController.text = state.weight!.toString();
+      if (state.age != null) _ageController.text = state.age!.toString();
     });
   }
 
@@ -38,11 +36,16 @@ class _UserInfoPageState extends State<UserInfoPage> {
   }
 
   Future<void> _saveUserInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('height', _heightController.text);
-    await prefs.setString('weight', _weightController.text);
-    await prefs.setString('age', _ageController.text);
-    Navigator.of(context).pushReplacementNamed('/home');
+    // Save via the StateService to trigger immediate UI updates
+    await ref.read(stateServiceProvider.notifier).updateUserInfo(
+      height: _heightController.text,
+      weight: _weightController.text,
+      age: _ageController.text,
+    );
+    
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/home');
+    }
   }
 
   @override
@@ -57,7 +60,7 @@ class _UserInfoPageState extends State<UserInfoPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Welcome to StepWithMe',
+                'Personal Profile',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 28,
@@ -67,17 +70,17 @@ class _UserInfoPageState extends State<UserInfoPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Enter your details to calculate your personal targets.',
+                'Updating your details will recalculate your target heart rate and step cadence.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: theme.colorScheme.secondary,
                 ),
               ),
               const SizedBox(height: 48),
               _buildTextField(
                 controller: _ageController,
-                labelText: 'Age',
+                labelText: 'Age (years)',
                 icon: Icons.calendar_today,
               ),
               const SizedBox(height: 24),
@@ -103,13 +106,17 @@ class _UserInfoPageState extends State<UserInfoPage> {
                   backgroundColor: theme.colorScheme.primary,
                 ),
                 child: Text(
-                  'Start My Journey',
+                  'Apply Changes',
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.onPrimary,
                   ),
                 ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
               ),
             ],
           ),
