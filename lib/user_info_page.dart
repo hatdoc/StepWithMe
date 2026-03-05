@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:myapp/main.dart';
+import 'package:myapp/app_state.dart';
 
 class UserInfoPage extends ConsumerStatefulWidget {
   const UserInfoPage({super.key});
@@ -36,15 +36,31 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
   }
 
   Future<void> _saveUserInfo() async {
+    final messenger = ScaffoldMessenger.of(context);
+    
     // Save via the StateService to trigger immediate UI updates
-    await ref.read(stateServiceProvider.notifier).updateUserInfo(
+    final success = await ref.read(stateServiceProvider.notifier).updateUserInfo(
       height: _heightController.text,
       weight: _weightController.text,
       age: _ageController.text,
     );
     
+    if (!success) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Please enter valid numeric values.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/home');
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      } else {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
     }
   }
 
@@ -52,74 +68,70 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Personal Profile',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        title: Text('Your Profile', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Set your details for scientifically accurate step cadences.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 40),
+            _buildTextField(
+              controller: _ageController,
+              labelText: 'Age (years)',
+              icon: Icons.calendar_today,
+              hint: 'e.g. 30',
+            ),
+            const SizedBox(height: 20),
+            _buildTextField(
+              controller: _heightController,
+              labelText: 'Height (cm)',
+              icon: Icons.height,
+              hint: 'e.g. 174',
+            ),
+            const SizedBox(height: 20),
+            _buildTextField(
+              controller: _weightController,
+              labelText: 'Weight (kg)',
+              icon: Icons.monitor_weight,
+              hint: 'e.g. 80',
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton(
+              onPressed: _saveUserInfo,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                elevation: 4,
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Updating your details will recalculate your target heart rate and step cadence.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: theme.colorScheme.secondary,
-                ),
+              child: Text(
+                'Apply Changes',
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 48),
-              _buildTextField(
-                controller: _ageController,
-                labelText: 'Age (years)',
-                icon: Icons.calendar_today,
-              ),
-              const SizedBox(height: 24),
-              _buildTextField(
-                controller: _heightController,
-                labelText: 'Height (cm)',
-                icon: Icons.height,
-              ),
-              const SizedBox(height: 24),
-              _buildTextField(
-                controller: _weightController,
-                labelText: 'Weight (kg)',
-                icon: Icons.monitor_weight,
-              ),
-              const SizedBox(height: 48),
-              ElevatedButton(
-                onPressed: _saveUserInfo,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  backgroundColor: theme.colorScheme.primary,
-                ),
-                child: Text(
-                  'Apply Changes',
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onPrimary,
-                  ),
-                ),
-              ),
+            ),
+            if (Navigator.of(context).canPop())
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Cancel'),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -129,22 +141,21 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
     required TextEditingController controller,
     required String labelText,
     required IconData icon,
+    String? hint,
   }) {
     final theme = Theme.of(context);
     return TextField(
       controller: controller,
       decoration: InputDecoration(
         labelText: labelText,
+        hintText: hint,
         prefixIcon: Icon(icon, color: theme.colorScheme.primary),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: theme.colorScheme.primary),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(
-            color: theme.colorScheme.secondary.withOpacity(0.5),
-          ),
+          borderSide: BorderSide(color: theme.colorScheme.outline.withOpacity(0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -152,7 +163,7 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
         ),
         labelStyle: GoogleFonts.poppins(color: theme.colorScheme.secondary),
       ),
-      keyboardType: TextInputType.number,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       style: GoogleFonts.poppins(color: theme.colorScheme.onSurface),
     );
   }
