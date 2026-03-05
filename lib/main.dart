@@ -38,20 +38,33 @@ final audioServiceProvider = Provider((ref) => AudioService());
 class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  Future<void> play(String sound) async {
+  Future<void> play(String soundKey) async {
+    String soundFile;
+    // Map the selection keys to the available audio files
+    switch (soundKey) {
+      case 'soft_sneaker':
+      case 'mechanical_click':
+        soundFile = 'step2.mp3';
+        break;
+      case 'heel_strike':
+      case 'wood_block':
+      case 'electronic_pulse':
+      default:
+        soundFile = 'step1.mp3';
+    }
+
     try {
-      await _audioPlayer.play(AssetSource('audio/$sound'));
+      await _audioPlayer.play(AssetSource('audio/$soundFile'));
     } on PlatformException catch (e) {
       developer.log(
-        'Error playing audio: $sound',
+        'Error playing audio: $soundFile ($soundKey)',
         name: 'AudioService',
         level: 900,
         error: e,
       );
-      // Optionally, show a user-friendly message
     } catch (e, s) {
       developer.log(
-        'An unexpected error occurred while playing audio: $sound',
+        'An unexpected error occurred while playing audio: $soundFile ($soundKey)',
         name: 'AudioService',
         level: 1000,
         error: e,
@@ -72,7 +85,7 @@ final stateServiceProvider = StateNotifierProvider<StateService, AppState>(
 class AppState {
   final int bpm;
   final bool isPlaying;
-  final String sound;
+  final String sound; // This now stores the unique sound key
 
   AppState({required this.bpm, required this.isPlaying, required this.sound});
 
@@ -87,7 +100,7 @@ class AppState {
 
 class StateService extends StateNotifier<AppState> {
   StateService()
-    : super(AppState(bpm: 120, isPlaying: false, sound: 'step1.mp3')) {
+    : super(AppState(bpm: 120, isPlaying: false, sound: 'heel_strike')) {
     _loadState();
   }
 
@@ -95,7 +108,7 @@ class StateService extends StateNotifier<AppState> {
     final prefs = await SharedPreferences.getInstance();
     state = state.copyWith(
       bpm: prefs.getInt('bpm') ?? 120,
-      sound: prefs.getString('sound') ?? 'step1.mp3',
+      sound: prefs.getString('sound') ?? 'heel_strike',
     );
   }
 
@@ -114,8 +127,8 @@ class StateService extends StateNotifier<AppState> {
     state = state.copyWith(isPlaying: !state.isPlaying);
   }
 
-  void setSound(String sound) {
-    state = state.copyWith(sound: sound);
+  void setSound(String soundKey) {
+    state = state.copyWith(sound: soundKey);
     _saveState();
   }
 }
@@ -377,11 +390,11 @@ class HomePage extends ConsumerWidget {
                 ),
 
                 items: [
-                  _buildDropdownItem('Heel Strike (Default)', 'step1.mp3'),
-                  _buildDropdownItem('Soft Sneaker', 'step2.mp3'),
-                  _buildDropdownItem('Wood Block', 'step1.mp3'),
-                  _buildDropdownItem('Mechanical Click', 'step2.mp3'),
-                  _buildDropdownItem('Electronic Pulse', 'step1.mp3'),
+                  _buildDropdownItem('Heel Strike (Default)', 'heel_strike'),
+                  _buildDropdownItem('Soft Sneaker', 'soft_sneaker'),
+                  _buildDropdownItem('Wood Block', 'wood_block'),
+                  _buildDropdownItem('Mechanical Click', 'mechanical_click'),
+                  _buildDropdownItem('Electronic Pulse', 'electronic_pulse'),
                 ],
 
                 onChanged: (value) {
