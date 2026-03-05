@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:developer' as developer; // Add this import
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,7 +39,25 @@ class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   Future<void> play(String sound) async {
-    await _audioPlayer.play(AssetSource('audio/$sound'));
+    try {
+      await _audioPlayer.play(AssetSource('audio/$sound'));
+    } on PlatformException catch (e) {
+      developer.log(
+        'Error playing audio: $sound',
+        name: 'AudioService',
+        level: 900,
+        error: e,
+      );
+      // Optionally, show a user-friendly message
+    } catch (e, s) {
+      developer.log(
+        'An unexpected error occurred while playing audio: $sound',
+        name: 'AudioService',
+        level: 1000,
+        error: e,
+        stackTrace: s,
+      );
+    }
   }
 
   Future<void> stop() async {
@@ -103,7 +123,9 @@ class StateService extends StateNotifier<AppState> {
 final bpmServiceProvider = Provider((ref) {
   final audioService = ref.watch(audioServiceProvider);
   final appState = ref.watch(stateServiceProvider);
-  return BPMService(audioService, appState);
+  final service = BPMService(audioService, appState);
+  ref.onDispose(() => service.stop());
+  return service;
 });
 
 class BPMService {
@@ -179,12 +201,14 @@ class HomePage extends ConsumerWidget {
     final bpmService = ref.read(bpmServiceProvider);
 
     // Start/stop BPM service based on appState.isPlaying
-
-    if (appState.isPlaying) {
-      bpmService.start();
-    } else {
-      bpmService.stop();
-    }
+    // Use ref.listen to handle side effects like starting/stopping the BPM service
+    ref.listen<AppState>(stateServiceProvider, (previous, next) {
+      if (next.isPlaying) {
+        bpmService.start();
+      } else {
+        bpmService.stop();
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -319,6 +343,8 @@ class HomePage extends ConsumerWidget {
 
     final stateService = ref.read(stateServiceProvider.notifier);
 
+    final audioService = ref.read(audioServiceProvider);
+
     return Card(
       elevation: 8,
 
@@ -327,37 +353,55 @@ class HomePage extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
 
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: appState.sound,
-
-            isExpanded: true,
-
-            icon: Icon(
-              Icons.arrow_drop_down_circle,
-              color: theme.colorScheme.primary,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Step Sound Effect',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.secondary,
+              ),
             ),
+            const SizedBox(height: 8),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: appState.sound,
 
-            items: [
-              _buildDropdownItem('Step 1', 'step1.mp3'),
+                isExpanded: true,
 
-              _buildDropdownItem('Step 2', 'step2.mp3'),
-            ],
+                icon: Icon(
+                  Icons.arrow_drop_down_circle,
+                  color: theme.colorScheme.primary,
+                ),
 
-            onChanged: (value) {
-              if (value != null) {
-                stateService.setSound(value);
-              }
-            },
+                items: [
+                  _buildDropdownItem('Heel Strike (Default)', 'step1.mp3'),
+                  _buildDropdownItem('Soft Sneaker', 'step2.mp3'),
+                  _buildDropdownItem('Wood Block', 'step1.mp3'),
+                  _buildDropdownItem('Mechanical Click', 'step2.mp3'),
+                  _buildDropdownItem('Electronic Pulse', 'step1.mp3'),
+                ],
 
-            style: GoogleFonts.poppins(
-              fontSize: 18,
+                onChanged: (value) {
+                  if (value != null) {
+                    stateService.setSound(value);
+                    // Preview the sound when selected
+                    audioService.play(value);
+                  }
+                },
 
-              color: theme.colorScheme.onSurface,
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+
+                  color: theme.colorScheme.onSurface,
+                ),
+
+                dropdownColor: theme.cardColor,
+              ),
             ),
-
-            dropdownColor: theme.cardColor,
-          ),
+          ],
         ),
       ),
     );
