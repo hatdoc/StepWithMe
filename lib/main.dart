@@ -358,6 +358,19 @@ class HomePage extends ConsumerWidget {
 
     final audioService = ref.read(audioServiceProvider);
 
+    final soundOptions = [
+      {'label': 'Heel Strike (Default)', 'value': 'heel_strike'},
+      {'label': 'Soft Sneaker', 'value': 'soft_sneaker'},
+      {'label': 'Wood Block', 'value': 'wood_block'},
+      {'label': 'Mechanical Click', 'value': 'mechanical_click'},
+      {'label': 'Electronic Pulse', 'value': 'electronic_pulse'},
+    ];
+
+    // Ensure the current sound value exists in the options to avoid AssertionError
+    final currentSound = soundOptions.any((opt) => opt['value'] == appState.sound)
+        ? appState.sound
+        : 'heel_strike';
+
     return Card(
       elevation: 8,
 
@@ -380,7 +393,7 @@ class HomePage extends ConsumerWidget {
             const SizedBox(height: 8),
             DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: appState.sound,
+                value: currentSound,
 
                 isExpanded: true,
 
@@ -389,13 +402,9 @@ class HomePage extends ConsumerWidget {
                   color: theme.colorScheme.primary,
                 ),
 
-                items: [
-                  _buildDropdownItem('Heel Strike (Default)', 'heel_strike'),
-                  _buildDropdownItem('Soft Sneaker', 'soft_sneaker'),
-                  _buildDropdownItem('Wood Block', 'wood_block'),
-                  _buildDropdownItem('Mechanical Click', 'mechanical_click'),
-                  _buildDropdownItem('Electronic Pulse', 'electronic_pulse'),
-                ],
+                items: soundOptions.map((opt) {
+                  return _buildDropdownItem(opt['label']!, opt['value']!);
+                }).toList(),
 
                 onChanged: (value) {
                   if (value != null) {
