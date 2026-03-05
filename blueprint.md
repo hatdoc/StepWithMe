@@ -35,5 +35,11 @@ StepWithMe is a mobile application designed to help users maintain a consistent 
     *   Riverpod `StateNotifier` manages the global application state (BPM, play/pause, sound selection).
     *   `ref.listen` is used to reactively start/stop services based on state changes, ensuring side effects are handled cleanly.
 
-5.  **Asset Management:**
+5.  **Platform Specifics (Android):**
+    *   Added permissions for `WAKE_LOCK`, `FOREGROUND_SERVICE`, and `FOREGROUND_SERVICE_MEDIA_PLAYBACK` in `AndroidManifest.xml` to support uninterrupted background audio.
+
+6.  **Asset Management:**
     *   A curated set of step sounds (`.mp3`) stored in `assets/audio/`.
+
+7.  **Git Policy:**
+    *   All changes are pushed directly to the `master` branch.
