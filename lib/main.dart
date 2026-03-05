@@ -65,8 +65,8 @@ class AudioService {
     }
 
     try {
-      // On some browsers/devices, stopping before playing helps precision
       await _audioPlayer.stop();
+      // On web, AssetSource should be just the filename inside assets/audio/ registered in pubspec
       await _audioPlayer.play(AssetSource('audio/$soundFile'), volume: 1.0);
     } catch (e) {
       developer.log('Playback error for $soundFile: $e', name: 'AudioService', level: 1000);
@@ -131,54 +131,42 @@ class AppState {
     return 'Obese';
   }
 
-  // --- Scientific Cadence Logic ---
+  // --- REFINED DYNAMIC CADENCE LOGIC ---
   
-  // Base moderate intensity (3 METs) varies by age:
-  // 21-30: ~125 spm
-  // 31-40: ~123 spm
-  // 41-50: ~120 spm
-  // 51-60: ~115 spm
-  // 61-85: ~102 spm
-  int get _baseModerateCadence {
-    final a = age ?? 30;
-    if (a <= 30) return 125;
-    if (a <= 40) return 123;
-    if (a <= 50) return 120;
-    if (a <= 60) return 115;
-    return 102;
-  }
+  // 1. Age Factor: Cadence naturally slows with age to maintain same intensity.
+  // Base moderate cadence for a 20yo is ~130. Drops by ~0.4 per year.
+  double get _ageImpact => (age ?? 30) * 0.4;
 
-  // BMI/Weight Adjustment: 
-  // For every 10kg above "Normal" BMI (midpoint 22), cadence req drops by ~2.5 spm.
-  int get _cadenceOffset {
-    if (height == null || weight == null) return 0;
-    double normalWeight = 22 * ((height! / 100) * (height! / 100));
-    double excessWeight = weight! - normalWeight;
-    if (excessWeight <= 0) return 0;
-    return (excessWeight / 10 * 2.5).round();
-  }
+  // 2. Height (Stride) Factor: Taller people take longer strides, so they need FEWER steps
+  // to reach the same speed/intensity.
+  // We use 170cm as baseline. Every 10cm difference impacts cadence by ~4 spm.
+  double get _heightImpact => ((height ?? 170) - 170) / 10 * 4;
+
+  // 3. BMI (Mass) Factor: Heavier people burn more calories at lower speeds.
+  // To stay in "Fat Burn" zone, they need slightly lower cadence than lean people.
+  // Baseline BMI 22. Every point above impacts cadence by ~1.2 spm.
+  double get _bmiImpact => ((bmi ?? 22) - 22) * 1.2;
 
   int get recommendedLight {
-    // Light is roughly 80% of moderate
-    return (_baseModerateCadence - _cadenceOffset - 20).clamp(60, 200);
+    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
+    return (base - 25).round().clamp(60, 200);
   }
 
   int get recommendedFatBurn {
-    return (_baseModerateCadence - _cadenceOffset).clamp(60, 200);
+    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
+    return base.round().clamp(60, 200);
   }
 
   int get recommendedJogging {
-    // Vigorous is roughly moderate + 25-30 spm
-    return (_baseModerateCadence - _cadenceOffset + 25).clamp(60, 200);
+    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
+    return (base + 30).round().clamp(60, 200);
   }
 
   int get recommendedRunning {
-    // Athletic running is usually 160-180
-    return (_baseModerateCadence - _cadenceOffset + 50).clamp(150, 190);
+    double base = 135 - _ageImpact - _heightImpact - _bmiImpact;
+    return (base + 55).round().clamp(60, 200);
   }
 
-  // MET (Metabolic Equivalent of Task) estimate
-  // 100 spm is approx 3 METs. 130 spm is approx 6 METs.
   double get estimatedMETs {
     if (bpm < 80) return 2.0;
     if (bpm < 100) return 3.0;
@@ -190,7 +178,6 @@ class AppState {
 
   double get caloriesPerMinute {
     if (weight == null) return 0;
-    // Formula: (MET * 3.5 * weight_kg) / 200
     return (estimatedMETs * 3.5 * weight!) / 200;
   }
 }
@@ -500,7 +487,6 @@ class HomePage extends ConsumerWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           if (!appState.isPlaying) {
-            // Prime the browser audio context
             await audioService.play(appState.sound);
           }
           stateService.togglePlay();
