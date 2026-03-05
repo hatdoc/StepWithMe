@@ -42,15 +42,24 @@ class AudioService {
     String soundFile;
     // Map the selection keys to the available audio files
     switch (soundKey) {
+      case 'heel_strike':
+        soundFile = 'step1.mp3';
+        break;
       case 'soft_sneaker':
+        soundFile = 'step2.mp3';
+        break;
+      case 'wood_block':
+        soundFile = 'step1.mp3';
+        break;
       case 'mechanical_click':
         soundFile = 'step2.mp3';
         break;
-      case 'heel_strike':
-      case 'wood_block':
       case 'electronic_pulse':
-      default:
         soundFile = 'step1.mp3';
+        break;
+      default:
+        // For new files, the key is the filename itself
+        soundFile = soundKey;
     }
 
     try {
@@ -361,9 +370,17 @@ class HomePage extends ConsumerWidget {
     final soundOptions = [
       {'label': 'Heel Strike (Default)', 'value': 'heel_strike'},
       {'label': 'Soft Sneaker', 'value': 'soft_sneaker'},
-      {'label': 'Wood Block', 'value': 'wood_block'},
-      {'label': 'Mechanical Click', 'value': 'mechanical_click'},
-      {'label': 'Electronic Pulse', 'value': 'electronic_pulse'},
+      {'label': 'Shallow Water', 'value': 'Walk in Shallow Water Series.mp3'},
+      {'label': 'Grass', 'value': 'Walk on Grass Series.mp3'},
+      {'label': 'Muddy Gravel', 'value': 'Walk on Muddy Gravel Series.mp3'},
+      {'label': 'Rocks', 'value': 'Walk on Rocks.mp3'},
+      {'label': 'Snow', 'value': 'Walk on Snow Series.mp3'},
+      {'label': 'Solid Metal', 'value': 'Walk on Solid Metal Series.mp3'},
+      {'label': 'Tile', 'value': 'Walk on Tile Series.mp3'},
+      {'label': 'Forest Walk', 'value': 'Walking In Forest.mp3'},
+      {'label': 'Gravel Path', 'value': 'Walking On Gravel Path.mp3'},
+      {'label': 'Wood Floor', 'value': 'Walking Wood Floor House.mp3'},
+      {'label': 'Water Walk (Sweetener)', 'value': 'Water Walk Series Sweetener .mp3'},
     ];
 
     // Ensure the current sound value exists in the options to avoid AssertionError
