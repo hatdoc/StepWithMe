@@ -21,8 +21,10 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
     // Load existing data into controllers
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final state = ref.read(stateServiceProvider);
-      if (state.height != null) _heightController.text = state.height!.toString();
-      if (state.weight != null) _weightController.text = state.weight!.toString();
+      if (state.height != null)
+        _heightController.text = state.height!.toString();
+      if (state.weight != null)
+        _weightController.text = state.weight!.toString();
       if (state.age != null) _ageController.text = state.age!.toString();
     });
   }
@@ -37,14 +39,15 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
 
   Future<void> _saveUserInfo() async {
     final messenger = ScaffoldMessenger.of(context);
-    
+
     // Save via the StateService to trigger immediate UI updates
-    final success = await ref.read(stateServiceProvider.notifier).updateUserInfo(
-      height: _heightController.text,
-      weight: _weightController.text,
-      age: _ageController.text,
-    );
-    
+    final success =
+        await ref.read(stateServiceProvider.notifier).updateUserInfo(
+              height: _heightController.text,
+              weight: _weightController.text,
+              age: _ageController.text,
+            );
+
     if (!success) {
       messenger.showSnackBar(
         const SnackBar(
@@ -70,7 +73,8 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: Text('Your Profile', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        title: Text('Your Profile',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -123,7 +127,8 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
               ),
               child: Text(
                 'Apply Changes',
-                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.poppins(
+                    fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
             if (Navigator.of(context).canPop())
@@ -155,7 +160,8 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+          borderSide: BorderSide(
+              color: theme.colorScheme.outline.withValues(alpha: 0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

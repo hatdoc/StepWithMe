@@ -54,7 +54,7 @@ class AppState {
   }
 
   // --- REFINED DYNAMIC CADENCE LOGIC (Based on CADENCE-Adults Study) ---
-  
+
   double get _ageImpact => ((age ?? 30) - 20).clamp(0, 80) * 0.3;
 
   double get _heightImpact {
@@ -96,7 +96,9 @@ class AppState {
 class StateService extends StateNotifier<AppState> {
   bool _isLoading = true;
 
-  StateService() : super(AppState(bpm: 120, isPlaying: false, sound: 'walk_on_grass.mp3')) {
+  StateService()
+      : super(
+            AppState(bpm: 120, isPlaying: false, sound: 'walk_on_grass.mp3')) {
     _loadState();
   }
 
@@ -114,17 +116,20 @@ class StateService extends StateNotifier<AppState> {
       age: aStr != null ? int.tryParse(aStr) : null,
       isPlaying: state.isPlaying,
     );
-    
+
     if (_isLoading) {
       state = newState;
       _isLoading = false;
     }
   }
 
-  Future<bool> updateUserInfo({required String height, required String weight, required String age}) async {
+  Future<bool> updateUserInfo(
+      {required String height,
+      required String weight,
+      required String age}) async {
     _isLoading = false;
     final prefs = await SharedPreferences.getInstance();
-    
+
     // Aggressive cleaning: keep only digits and one decimal point
     String cleanH = height.replaceAll(',', '.').trim();
     String cleanW = weight.replaceAll(',', '.').trim();
@@ -137,7 +142,7 @@ class StateService extends StateNotifier<AppState> {
     if (h != null) await prefs.setString('height', h.toString());
     if (w != null) await prefs.setString('weight', w.toString());
     if (a != null) await prefs.setString('age', a.toString());
-    
+
     state = AppState(
       bpm: state.bpm,
       isPlaying: state.isPlaying,
@@ -146,7 +151,7 @@ class StateService extends StateNotifier<AppState> {
       weight: w ?? state.weight,
       age: a ?? state.age,
     );
-    
+
     return h != null && w != null && a != null;
   }
 

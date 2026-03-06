@@ -25,7 +25,8 @@ class ThemeProvider with ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
 }
@@ -34,6 +35,7 @@ final audioServiceProvider = Provider((ref) => AudioService());
 
 class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final Map<String, Source> _sourceCache = {};
   bool _isInitialized = false;
   Future<void>? _initFuture;
 
@@ -43,11 +45,11 @@ class AudioService {
 
   Future<void> _init() async {
     if (_isInitialized) return;
-    
+
     if (kIsWeb) {
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
     }
-    
+
     // Set audio context for a more standard media usage
     await _audioPlayer.setAudioContext(AudioContext(
       android: const AudioContextAndroid(
@@ -63,6 +65,32 @@ class AudioService {
         },
       ),
     ));
+
+    // Pre-cache all sounds to memory
+    final sounds = [
+      'walk_on_grass.mp3',
+      'walking_in_forest.mp3',
+      'walking_on_gravel_path.mp3',
+      'walk_on_rocks.mp3',
+      'walk_on_snow.mp3',
+      'walk_on_tile.mp3',
+      'walking_wood_floor.mp3',
+      'walk_on_solid_metal.mp3',
+      'walk_in_shallow_water.mp3',
+      'walk_on_muddy_gravel.mp3',
+      'water_walk_sweetener.mp3',
+    ];
+
+    for (var s in sounds) {
+      final source = AssetSource('audio/$s');
+      _sourceCache[s] = source;
+      try {
+        await AudioCache.instance.load('audio/$s');
+      } catch (e) {
+        developer.log('Preload warning for $s: $e', name: 'AudioService');
+      }
+    }
+
     _isInitialized = true;
   }
 
@@ -70,16 +98,18 @@ class AudioService {
     if (!_isInitialized) await _initFuture;
 
     String assetPath = soundFile;
-    // Keep old mapping for compatibility but prioritize filenames
     if (soundFile == 'heel_strike') assetPath = 'walking_wood_floor.mp3';
     if (soundFile == 'soft_sneaker') assetPath = 'walking_in_forest.mp3';
+    if (soundFile == 'walk_on_rock.mp3') assetPath = 'walk_on_rocks.mp3';
 
     try {
-      // In version 6.0.0, calling play directly will stop if already playing
-      // We don't need a separate stop() here which could cause glitches
-      await _audioPlayer.play(AssetSource('audio/$assetPath'), volume: 1.0);
+      final source = _sourceCache[assetPath] ?? AssetSource('audio/$assetPath');
+      // Low latency: don't call stop() explicitly, native handles re-playing
+      await _audioPlayer.play(source, volume: 1.0);
     } catch (e) {
-      developer.log('Playback error for $assetPath: $e', name: 'AudioService', level: 1000);
+      developer.log('Audio playback error for $assetPath: $e',
+          name: 'AudioService', level: 1000);
+      debugPrint("Audio playback error: $e");
     }
   }
 
@@ -91,9 +121,10 @@ class AudioService {
 final bpmServiceProvider = Provider((ref) {
   final audioService = ref.read(audioServiceProvider);
   final service = BPMService(audioService, ref);
-  
+
   // Listen for play/pause toggles
-  ref.listen<bool>(stateServiceProvider.select((s) => s.isPlaying), (prev, next) {
+  ref.listen<bool>(stateServiceProvider.select((s) => s.isPlaying),
+      (prev, next) {
     if (next) {
       service.start();
     } else {
@@ -101,18 +132,19 @@ final bpmServiceProvider = Provider((ref) {
     }
   });
 
-  // Listen for sound or BPM changes while playing
+  // Listen for BPM changes while playing
   ref.listen<int>(stateServiceProvider.select((s) => s.bpm), (prev, next) {
     final state = ref.read(stateServiceProvider);
     if (state.isPlaying) {
       service.restart();
     }
   });
-  
+
+  // Listen for sound changes while playing
   ref.listen<String>(stateServiceProvider.select((s) => s.sound), (prev, next) {
     final state = ref.read(stateServiceProvider);
     if (state.isPlaying) {
-      service.restart();
+      service.restart(immediate: true); // Immediate feedback on sound change
     }
   });
 
@@ -131,23 +163,28 @@ class BPMService {
     _timer?.cancel();
     final state = _ref.read(stateServiceProvider);
     if (state.bpm <= 0) return;
-    
+
     // Play the first step immediately
     _audioService.play(state.sound);
-    
+
     _scheduleNextTick();
   }
 
-  void restart() {
-    // Restart logic to adjust to new BPM or sound without stopping the rhythm abruptly
+  void restart({bool immediate = false}) {
     _timer?.cancel();
+    final state = _ref.read(stateServiceProvider);
+    if (!state.isPlaying) return;
+
+    if (immediate) {
+      _audioService.play(state.sound);
+    }
     _scheduleNextTick();
   }
 
   void _scheduleNextTick() {
     final state = _ref.read(stateServiceProvider);
     if (state.bpm <= 0 || !state.isPlaying) return;
-    
+
     final interval = Duration(milliseconds: 60000 ~/ state.bpm);
     _timer = Timer.periodic(interval, (_) {
       final currentState = _ref.read(stateServiceProvider);
@@ -211,8 +248,6 @@ class HomePage extends ConsumerWidget {
     final stateService = ref.read(stateServiceProvider.notifier);
     final audioService = ref.read(audioServiceProvider);
 
-    // Redundant listener removed as bpmServiceProvider handles this logic internally
-
     final maxHR = appState.age != null ? 220 - appState.age! : 0;
     final fatBurnMin = (maxHR * 0.60).toInt();
     final fatBurnMax = (maxHR * 0.70).toInt();
@@ -257,9 +292,14 @@ class HomePage extends ConsumerWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildStatItem('BMI', appState.bmi?.toStringAsFixed(1) ?? '--', theme),
-                          _buildStatItem('Category', appState.bmiCategory, theme),
-                          _buildStatItem('Burn/Hr', '${(appState.caloriesPerMinute * 60).toInt()} kcal', theme),
+                          _buildStatItem('BMI',
+                              appState.bmi?.toStringAsFixed(1) ?? '--', theme),
+                          _buildStatItem(
+                              'Category', appState.bmiCategory, theme),
+                          _buildStatItem(
+                              'Burn/Hr',
+                              '${(appState.caloriesPerMinute * 60).toInt()} kcal',
+                              theme),
                         ],
                       ),
                       const Divider(height: 32),
@@ -327,7 +367,8 @@ class HomePage extends ConsumerWidget {
                         },
                         appearance: CircularSliderAppearance(
                           customColors: CustomSliderColors(
-                            trackColor: theme.colorScheme.secondary.withValues(alpha: 0.2),
+                            trackColor: theme.colorScheme.secondary
+                                .withValues(alpha: 0.2),
                             progressBarColor: theme.colorScheme.primary,
                             dotColor: theme.colorScheme.primary,
                           ),
@@ -356,10 +397,26 @@ class HomePage extends ConsumerWidget {
                         runSpacing: 8,
                         alignment: WrapAlignment.center,
                         children: [
-                          _buildModeButton('Light', appState.recommendedLight, stateService, theme, appState.bpm),
-                          _buildModeButton('Fat Burn', appState.recommendedFatBurn, stateService, theme, appState.bpm),
-                          _buildModeButton('Jogging', appState.recommendedJogging, stateService, theme, appState.bpm),
-                          _buildModeButton('Running', appState.recommendedRunning, stateService, theme, appState.bpm),
+                          _buildModeButton('Light', appState.recommendedLight,
+                              stateService, theme, appState.bpm),
+                          _buildModeButton(
+                              'Fat Burn',
+                              appState.recommendedFatBurn,
+                              stateService,
+                              theme,
+                              appState.bpm),
+                          _buildModeButton(
+                              'Jogging',
+                              appState.recommendedJogging,
+                              stateService,
+                              theme,
+                              appState.bpm),
+                          _buildModeButton(
+                              'Running',
+                              appState.recommendedRunning,
+                              stateService,
+                              theme,
+                              appState.bpm),
                         ],
                       ),
                     ],
@@ -377,10 +434,7 @@ class HomePage extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         child: SafeArea(
           child: ElevatedButton.icon(
-            onPressed: () async {
-              if (!appState.isPlaying) {
-                await audioService.play(appState.sound);
-              }
+            onPressed: () {
               stateService.togglePlay();
             },
             style: ElevatedButton.styleFrom(
@@ -393,7 +447,9 @@ class HomePage extends ConsumerWidget {
               ),
             ),
             icon: Icon(
-              appState.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+              appState.isPlaying
+                  ? Icons.pause_circle_filled
+                  : Icons.play_circle_filled,
               size: 28,
             ),
             label: Text(
@@ -445,14 +501,20 @@ class HomePage extends ConsumerWidget {
       onPressed: () => service.setBpm(value),
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        backgroundColor: isSelected ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest,
-        foregroundColor: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+        backgroundColor: isSelected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.surfaceContainerHighest,
+        foregroundColor: isSelected
+            ? theme.colorScheme.onPrimary
+            : theme.colorScheme.onSurfaceVariant,
         elevation: isSelected ? 6 : 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: Column(
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           Text('$value spm', style: const TextStyle(fontSize: 10)),
         ],
       ),
@@ -476,12 +538,14 @@ class HomePage extends ConsumerWidget {
       {'label': 'Solid Metal ⚙️', 'value': 'walk_on_solid_metal.mp3'},
       {'label': 'Shallow Water 💧', 'value': 'walk_in_shallow_water.mp3'},
       {'label': 'Muddy Gravel 🪨', 'value': 'walk_on_muddy_gravel.mp3'},
+      {'label': 'Water Sweetener 🌊', 'value': 'water_walk_sweetener.mp3'},
     ];
 
     // Ensure current sound is valid or default to grass
-    final currentSound = soundOptions.any((opt) => opt['value'] == appState.sound)
-        ? appState.sound
-        : 'walk_on_grass.mp3';
+    final currentSound =
+        soundOptions.any((opt) => opt['value'] == appState.sound)
+            ? appState.sound
+            : 'walk_on_grass.mp3';
 
     return Card(
       elevation: 4,
@@ -489,7 +553,7 @@ class HomePage extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
@@ -516,7 +580,8 @@ class HomePage extends ConsumerWidget {
                 child: DropdownButton<String>(
                   value: currentSound,
                   isExpanded: true,
-                  icon: Icon(Icons.keyboard_arrow_down, color: theme.colorScheme.primary),
+                  icon: Icon(Icons.keyboard_arrow_down,
+                      color: theme.colorScheme.primary),
                   items: soundOptions.map((opt) {
                     return DropdownMenuItem<String>(
                       value: opt['value'],
@@ -542,6 +607,19 @@ class HomePage extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () async {
+                for (final opt in soundOptions) {
+                  developer.log('Testing sound: ${opt['value']}',
+                      name: 'Debug');
+                  await audioService.play(opt['value']!);
+                  await Future.delayed(const Duration(milliseconds: 600));
+                }
+              },
+              icon: const Icon(Icons.bug_report, size: 16),
+              label: const Text('Test All Sounds (Debug)'),
             ),
           ],
         ),
