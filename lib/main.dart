@@ -35,20 +35,24 @@ final audioServiceProvider = Provider((ref) => AudioService());
 class AudioService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isInitialized = false;
+  Future<void>? _initFuture;
 
   AudioService() {
-    _init();
+    _initFuture = _init();
   }
 
   Future<void> _init() async {
+    if (_isInitialized) return;
+    
     if (kIsWeb) {
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
     }
-    // Set audio context for background playback if possible
+    
+    // Set audio context for a more standard media usage
     await _audioPlayer.setAudioContext(AudioContext(
       android: const AudioContextAndroid(
-        usageType: AndroidUsageType.assistanceSonification,
-        contentType: AndroidContentType.sonification,
+        usageType: AndroidUsageType.media,
+        contentType: AndroidContentType.music,
         audioFocus: AndroidAudioFocus.none,
       ),
       iOS: AudioContextIOS(
@@ -63,15 +67,16 @@ class AudioService {
   }
 
   Future<void> play(String soundFile) async {
-    if (!_isInitialized) await _init();
+    if (!_isInitialized) await _initFuture;
 
-    // Use default if mapping is needed, but now we use filenames directly
     String assetPath = soundFile;
+    // Keep old mapping for compatibility but prioritize filenames
     if (soundFile == 'heel_strike') assetPath = 'walking_wood_floor.mp3';
     if (soundFile == 'soft_sneaker') assetPath = 'walking_in_forest.mp3';
 
     try {
-      await _audioPlayer.stop();
+      // In version 6.0.0, calling play directly will stop if already playing
+      // We don't need a separate stop() here which could cause glitches
       await _audioPlayer.play(AssetSource('audio/$assetPath'), volume: 1.0);
     } catch (e) {
       developer.log('Playback error for $assetPath: $e', name: 'AudioService', level: 1000);
@@ -84,38 +89,73 @@ class AudioService {
 }
 
 final bpmServiceProvider = Provider((ref) {
-  final audioService = ref.watch(audioServiceProvider);
-  final appState = ref.watch(stateServiceProvider);
-  final service = BPMService(audioService, appState);
+  final audioService = ref.read(audioServiceProvider);
+  final service = BPMService(audioService, ref);
   
-  // Auto-start if it was already playing when state changed
-  if (appState.isPlaying) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  // Listen for play/pause toggles
+  ref.listen<bool>(stateServiceProvider.select((s) => s.isPlaying), (prev, next) {
+    if (next) {
       service.start();
-    });
-  }
+    } else {
+      service.stop();
+    }
+  });
+
+  // Listen for sound or BPM changes while playing
+  ref.listen<int>(stateServiceProvider.select((s) => s.bpm), (prev, next) {
+    final state = ref.read(stateServiceProvider);
+    if (state.isPlaying) {
+      service.restart();
+    }
+  });
   
+  ref.listen<String>(stateServiceProvider.select((s) => s.sound), (prev, next) {
+    final state = ref.read(stateServiceProvider);
+    if (state.isPlaying) {
+      service.restart();
+    }
+  });
+
   ref.onDispose(() => service.stop());
   return service;
 });
 
 class BPMService {
   final AudioService _audioService;
-  final AppState _appState;
+  final Ref _ref;
   Timer? _timer;
 
-  BPMService(this._audioService, this._appState);
+  BPMService(this._audioService, this._ref);
 
   void start() {
     _timer?.cancel();
-    if (_appState.bpm <= 0) return;
+    final state = _ref.read(stateServiceProvider);
+    if (state.bpm <= 0) return;
     
     // Play the first step immediately
-    _audioService.play(_appState.sound);
+    _audioService.play(state.sound);
     
-    final interval = Duration(milliseconds: 60000 ~/ _appState.bpm);
+    _scheduleNextTick();
+  }
+
+  void restart() {
+    // Restart logic to adjust to new BPM or sound without stopping the rhythm abruptly
+    _timer?.cancel();
+    _scheduleNextTick();
+  }
+
+  void _scheduleNextTick() {
+    final state = _ref.read(stateServiceProvider);
+    if (state.bpm <= 0 || !state.isPlaying) return;
+    
+    final interval = Duration(milliseconds: 60000 ~/ state.bpm);
     _timer = Timer.periodic(interval, (_) {
-      _audioService.play(_appState.sound);
+      final currentState = _ref.read(stateServiceProvider);
+      if (currentState.isPlaying) {
+        _audioService.play(currentState.sound);
+      } else {
+        _timer?.cancel();
+      }
     });
   }
 
@@ -169,16 +209,9 @@ class HomePage extends ConsumerWidget {
     final theme = Theme.of(context);
     final appState = ref.watch(stateServiceProvider);
     final stateService = ref.read(stateServiceProvider.notifier);
-    final bpmService = ref.read(bpmServiceProvider);
     final audioService = ref.read(audioServiceProvider);
 
-    ref.listen<bool>(stateServiceProvider.select((s) => s.isPlaying), (prev, next) {
-      if (next) {
-        bpmService.start();
-      } else {
-        bpmService.stop();
-      }
-    });
+    // Redundant listener removed as bpmServiceProvider handles this logic internally
 
     final maxHR = appState.age != null ? 220 - appState.age! : 0;
     final fatBurnMin = (maxHR * 0.60).toInt();
