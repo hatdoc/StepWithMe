@@ -62,7 +62,6 @@ class AudioService {
           category: AVAudioSessionCategory.playback,
           options: {
             AVAudioSessionOptions.mixWithOthers,
-            AVAudioSessionOptions.defaultToSpeaker,
           },
         ),
       ));
@@ -88,7 +87,7 @@ class AudioService {
       for (var entry in terrainMap.entries) {
         final source = AssetSource('audio/${entry.value}');
         _sourceCache[entry.key] = source;
-        _sourceCache[entry.value] = source; // Cache by filename too for backward compatibility
+        _sourceCache[entry.value] = source;
       }
 
       print('AudioService: Initialization complete. Terrain keys: ${_sourceCache.keys.join(', ')}');
@@ -106,9 +105,10 @@ class AudioService {
 
     String finalKey = soundId;
     // Map any legacy names/keys to standardized ones
-    if (soundId == 'heel_strike') finalKey = 'wood';
-    if (soundId == 'soft_sneaker') finalKey = 'forest';
-    if (soundId == 'walk_on_rock.mp3') finalKey = 'rocks';
+    if (soundId == 'heel_strike' || soundId == 'walking_wood_floor.mp3') finalKey = 'wood';
+    if (soundId == 'soft_sneaker' || soundId == 'forest' || soundId == 'walking_in_forest.mp3' || soundId == 'walk_on_forest.mp3') finalKey = 'forest';
+    if (soundId == 'gravel' || soundId == 'walking_on_gravel_path.mp3' || soundId == 'walk_on_gravel.mp3') finalKey = 'gravel';
+    if (soundId == 'walk_on_rock.mp3' || soundId == 'rocks') finalKey = 'rocks';
 
     try {
       final source = _sourceCache[finalKey] ?? AssetSource('audio/$finalKey');
