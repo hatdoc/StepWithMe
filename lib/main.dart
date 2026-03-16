@@ -104,15 +104,15 @@ class AudioService {
     switch (soundKey) {
       case 'grass': return 1.0;
       case 'forest': return 1.0;      // Forest is extremely quiet, maximize it
-      case 'gravel': return 0.45;     // Reduce crunch significantly
-      case 'rocks': return 0.5;      // Reduce sharp rock strikes
-      case 'snow': return 1.0;
-      case 'tile': return 0.45;      // Reduce sharp tile clicks
-      case 'wood': return 0.7;
-      case 'metal': return 0.35;     // Metal is very piercing, reduce heavily
-      case 'water': return 0.9;
-      case 'muddy_gravel': return 0.55;
-      case 'water_sweetener': return 0.6;
+      case 'gravel': return 0.7;       // Balanced with others
+      case 'rocks': return 0.75;
+      case 'snow': return 0.75;       // Decreased as requested
+      case 'tile': return 0.7;
+      case 'wood': return 0.9;
+      case 'metal': return 0.3;       // Decreased as requested (very piercing)
+      case 'water': return 0.65;      // Decreased as requested (shallow water)
+      case 'muddy_gravel': return 0.8;
+      case 'water_sweetener': return 0.85;
       default: return 1.0;
     }
   }
