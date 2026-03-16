@@ -21,11 +21,15 @@ class _UserInfoPageState extends ConsumerState<UserInfoPage> {
     // Load existing data into controllers
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final state = ref.read(stateServiceProvider);
-      if (state.height != null)
+      if (state.height != null) {
         _heightController.text = state.height!.toString();
-      if (state.weight != null)
+      }
+      if (state.weight != null) {
         _weightController.text = state.weight!.toString();
-      if (state.age != null) _ageController.text = state.age!.toString();
+      }
+      if (state.age != null) {
+        _ageController.text = state.age!.toString();
+      }
     });
   }
 

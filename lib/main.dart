@@ -70,52 +70,55 @@ class AudioService {
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
       await _audioPlayer.setVolume(1.0);
 
-      // Cache sources
-      final sounds = [
-        'walk_on_grass.mp3',
-        'walking_in_forest.mp3',
-        'walking_on_gravel_path.mp3',
-        'walk_on_rocks.mp3',
-        'walk_on_snow.mp3',
-        'walk_on_tile.mp3',
-        'walking_wood_floor.mp3',
-        'walk_on_solid_metal.mp3',
-        'walk_in_shallow_water.mp3',
-        'walk_on_muddy_gravel.mp3',
-        'water_walk_sweetener.mp3',
-      ];
+      // Mapping of shorthand keys to high-quality audio filenames
+      final Map<String, String> terrainMap = {
+        'grass': 'walk_on_grass.mp3',
+        'forest': 'walk_on_forest.mp3',
+        'gravel': 'walk_on_gravel.mp3',
+        'rocks': 'walk_on_rocks.mp3',
+        'snow': 'walk_on_snow.mp3',
+        'tile': 'walk_on_tile.mp3',
+        'wood': 'walking_wood_floor.mp3',
+        'metal': 'walk_on_solid_metal.mp3',
+        'water': 'walk_in_shallow_water.mp3',
+        'muddy_gravel': 'walk_on_muddy_gravel.mp3',
+        'water_sweetener': 'water_walk_sweetener.mp3',
+      };
 
-      for (var s in sounds) {
-        _sourceCache[s] = AssetSource('audio/$s');
+      for (var entry in terrainMap.entries) {
+        final source = AssetSource('audio/${entry.value}');
+        _sourceCache[entry.key] = source;
+        _sourceCache[entry.value] = source; // Cache by filename too for backward compatibility
       }
 
-      print('AudioService: Initialization complete. Sources: ${_sourceCache.keys.join(', ')}');
+      print('AudioService: Initialization complete. Terrain keys: ${_sourceCache.keys.join(', ')}');
       _isInitialized = true;
     } catch (e) {
       print('AudioService ERROR: Failed to initialize: $e');
     }
   }
 
-  Future<void> play(String soundFile) async {
+  Future<void> play(String soundId) async {
     if (!_isInitialized) {
       print('AudioService: Play called before init, waiting...');
       await _initFuture;
     }
 
-    String assetName = soundFile;
-    if (soundFile == 'heel_strike') assetName = 'walking_wood_floor.mp3';
-    if (soundFile == 'soft_sneaker') assetName = 'walking_in_forest.mp3';
-    if (soundFile == 'walk_on_rock.mp3') assetName = 'walk_on_rocks.mp3';
+    String finalKey = soundId;
+    // Map any legacy names/keys to standardized ones
+    if (soundId == 'heel_strike') finalKey = 'wood';
+    if (soundId == 'soft_sneaker') finalKey = 'forest';
+    if (soundId == 'walk_on_rock.mp3') finalKey = 'rocks';
 
     try {
-      final source = _sourceCache[assetName] ?? AssetSource('audio/$assetName');
-      print('AudioService: Playing sound -> $assetName');
+      final source = _sourceCache[finalKey] ?? AssetSource('audio/$finalKey');
+      print('AudioService: Playing sound key -> $finalKey');
       
       // Immediate stop/play for rhythm
       await _audioPlayer.stop();
       await _audioPlayer.play(source, volume: 1.0);
     } catch (e) {
-      print('AudioService ERROR: Playback failed for $assetName: $e');
+      print('AudioService ERROR: Playback failed for $finalKey: $e');
     }
   }
 
@@ -277,7 +280,6 @@ class HomePage extends ConsumerWidget {
     final theme = Theme.of(context);
     final appState = ref.watch(stateServiceProvider);
     final stateService = ref.read(stateServiceProvider.notifier);
-    final audioService = ref.read(audioServiceProvider);
 
     developer.log('HomePage Build - isPlaying: ${appState.isPlaying}', name: 'UI');
 
@@ -558,27 +560,53 @@ class HomePage extends ConsumerWidget {
     final theme = Theme.of(context);
     final appState = ref.watch(stateServiceProvider);
     final stateService = ref.read(stateServiceProvider.notifier);
-    final audioService = ref.read(audioServiceProvider);
 
     final soundOptions = [
-      {'label': 'Grass 🌿', 'value': 'walk_on_grass.mp3'},
-      {'label': 'Forest 🌲', 'value': 'walking_in_forest.mp3'},
-      {'label': 'Gravel Path 🪨', 'value': 'walking_on_gravel_path.mp3'},
-      {'label': 'Rock 🪨', 'value': 'walk_on_rocks.mp3'},
-      {'label': 'Snow ❄️', 'value': 'walk_on_snow.mp3'},
-      {'label': 'Tile 🧱', 'value': 'walk_on_tile.mp3'},
-      {'label': 'Wood Floor 🪵', 'value': 'walking_wood_floor.mp3'},
-      {'label': 'Solid Metal ⚙️', 'value': 'walk_on_solid_metal.mp3'},
-      {'label': 'Shallow Water 💧', 'value': 'walk_in_shallow_water.mp3'},
-      {'label': 'Muddy Gravel 🪨', 'value': 'walk_on_muddy_gravel.mp3'},
-      {'label': 'Water Sweetener 🌊', 'value': 'water_walk_sweetener.mp3'},
+      {'label': 'Grass 🌿', 'value': 'grass'},
+      {'label': 'Forest 🌲', 'value': 'forest'},
+      {'label': 'Gravel Path 🪨', 'value': 'gravel'},
+      {'label': 'Rock 🪨', 'value': 'rocks'},
+      {'label': 'Snow ❄️', 'value': 'snow'},
+      {'label': 'Tile 🧱', 'value': 'tile'},
+      {'label': 'Wood Floor 🪵', 'value': 'wood'},
+      {'label': 'Solid Metal ⚙️', 'value': 'metal'},
+      {'label': 'Shallow Water 💧', 'value': 'water'},
+      {'label': 'Muddy Gravel 🪨', 'value': 'muddy_gravel'},
+      {'label': 'Water Sweetener 🌊', 'value': 'water_sweetener'},
     ];
 
-    // Ensure current sound is valid or default to grass
-    final currentSound =
-        soundOptions.any((opt) => opt['value'] == appState.sound)
-            ? appState.sound
-            : 'walk_on_grass.mp3';
+    // Map any old filename-based state to the new keys
+    String currentSound = appState.sound;
+    if (currentSound.endsWith('.mp3')) {
+      if (currentSound == 'walk_on_grass.mp3') {
+        currentSound = 'grass';
+      } else if (currentSound == 'walk_on_forest.mp3') {
+        currentSound = 'forest';
+      } else if (currentSound == 'walk_on_gravel.mp3') {
+        currentSound = 'gravel';
+      } else if (currentSound == 'walk_on_rocks.mp3') {
+        currentSound = 'rocks';
+      } else if (currentSound == 'walk_on_snow.mp3') {
+        currentSound = 'snow';
+      } else if (currentSound == 'walk_on_tile.mp3') {
+        currentSound = 'tile';
+      } else if (currentSound == 'walking_wood_floor.mp3') {
+        currentSound = 'wood';
+      } else if (currentSound == 'walk_on_solid_metal.mp3') {
+        currentSound = 'metal';
+      } else if (currentSound == 'walk_in_shallow_water.mp3') {
+        currentSound = 'water';
+      } else if (currentSound == 'walk_on_muddy_gravel.mp3') {
+        currentSound = 'muddy_gravel';
+      } else if (currentSound == 'water_walk_sweetener.mp3') {
+        currentSound = 'water_sweetener';
+      }
+    }
+
+    // Final safety check
+    if (!soundOptions.any((opt) => opt['value'] == currentSound)) {
+      currentSound = 'grass';
+    }
 
     return Card(
       elevation: 4,
