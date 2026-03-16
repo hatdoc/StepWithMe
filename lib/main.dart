@@ -66,7 +66,9 @@ class AudioService {
         ),
       ));
 
+      // Use low latency mode for rhythmic precision
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
       await _audioPlayer.setVolume(1.0);
 
       // Mapping of shorthand keys to high-quality audio filenames
@@ -101,16 +103,16 @@ class AudioService {
   double _getNormalizedVolume(String soundKey) {
     switch (soundKey) {
       case 'grass': return 1.0;
-      case 'forest': return 0.95;
-      case 'gravel': return 0.8;      // Gravel is naturally crunchy and loud
-      case 'rocks': return 0.85;
+      case 'forest': return 1.0;      // Forest is extremely quiet, maximize it
+      case 'gravel': return 0.45;     // Reduce crunch significantly
+      case 'rocks': return 0.5;      // Reduce sharp rock strikes
       case 'snow': return 1.0;
-      case 'tile': return 0.85;
-      case 'wood': return 0.9;
-      case 'metal': return 0.7;      // Metal strikes are very sharp/loud
-      case 'water': return 1.0;
-      case 'muddy_gravel': return 0.85;
-      case 'water_sweetener': return 0.75;
+      case 'tile': return 0.45;      // Reduce sharp tile clicks
+      case 'wood': return 0.7;
+      case 'metal': return 0.35;     // Metal is very piercing, reduce heavily
+      case 'water': return 0.9;
+      case 'muddy_gravel': return 0.55;
+      case 'water_sweetener': return 0.6;
       default: return 1.0;
     }
   }
@@ -139,8 +141,8 @@ class AudioService {
       
       developer.log('AudioService: Playing $finalKey at volume $volume', name: 'AudioService');
       
-      // We no longer call stop() explicitly before play() to avoid rhythmic gaps 
-      // and volume dips. Audioplayers handles the restart internally.
+      // Stop then play ensures immediate restart on iOS/Web
+      await _audioPlayer.stop();
       await _audioPlayer.play(source, volume: volume);
     } catch (e) {
       print('AudioService ERROR: Playback failed for $finalKey: $e');
