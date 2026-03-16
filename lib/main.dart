@@ -605,21 +605,13 @@ class HomePage extends ConsumerWidget {
                   },
                   dropdownColor: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: () async {
-                for (final opt in soundOptions) {
-                  developer.log('Testing sound: ${opt['value']}',
-                      name: 'Debug');
-                  await audioService.play(opt['value']!);
-                  await Future.delayed(const Duration(milliseconds: 600));
-                }
-              },
-              icon: const Icon(Icons.bug_report, size: 16),
-              label: const Text('Test All Sounds (Debug)'),
             ),
           ],
         ),
