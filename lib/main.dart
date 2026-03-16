@@ -41,18 +41,18 @@ class AudioService {
 
   AudioService() {
     _initFuture = _init();
-    _audioPlayer.onLog.listen((msg) => developer.log('AudioPlayer: $msg', name: 'AudioService'));
-    _audioPlayer.onPlayerStateChanged.listen((state) => developer.log('Player State: $state', name: 'AudioService'));
+    _audioPlayer.onLog.listen((msg) => print('AudioService [PlayerLog]: $msg'));
+    _audioPlayer.onPlayerStateChanged.listen((state) => print('AudioService [State]: $state'));
   }
 
   Future<void> _init() async {
     if (_isInitialized) return;
 
     try {
-      developer.log('Initializing AudioService...', name: 'AudioService');
+      print('AudioService: Starting initialization...');
       
-      // Set audio context for iOS/Android
-      await _audioPlayer.setAudioContext(AudioContext(
+      // Global configuration for all players
+      await AudioPlayer.global.setAudioContext(AudioContext(
         android: const AudioContextAndroid(
           usageType: AndroidUsageType.media,
           contentType: AndroidContentType.music,
@@ -70,7 +70,7 @@ class AudioService {
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
       await _audioPlayer.setVolume(1.0);
 
-      // Pre-cache sources
+      // Cache sources
       final sounds = [
         'walk_on_grass.mp3',
         'walking_in_forest.mp3',
@@ -89,16 +89,16 @@ class AudioService {
         _sourceCache[s] = AssetSource('audio/$s');
       }
 
-      developer.log('AudioService initialized successfully. Sources cached: ${_sourceCache.length}', name: 'AudioService');
+      print('AudioService: Initialization complete. Sources: ${_sourceCache.keys.join(', ')}');
       _isInitialized = true;
     } catch (e) {
-      developer.log('Failed to initialize AudioService: $e', name: 'AudioService', level: 1000);
+      print('AudioService ERROR: Failed to initialize: $e');
     }
   }
 
   Future<void> play(String soundFile) async {
     if (!_isInitialized) {
-      developer.log('Play called before init, waiting...', name: 'AudioService');
+      print('AudioService: Play called before init, waiting...');
       await _initFuture;
     }
 
@@ -109,15 +109,13 @@ class AudioService {
 
     try {
       final source = _sourceCache[assetName] ?? AssetSource('audio/$assetName');
-      developer.log('Attempting to play: $assetName', name: 'AudioService');
+      print('AudioService: Playing sound -> $assetName');
       
-      // Explicitly set volume and play
+      // Immediate stop/play for rhythm
       await _audioPlayer.stop();
-      await _audioPlayer.setVolume(1.0);
-      await _audioPlayer.play(source);
+      await _audioPlayer.play(source, volume: 1.0);
     } catch (e) {
-      developer.log('Audio playback error for $assetName: $e',
-          name: 'AudioService', level: 1000);
+      print('AudioService ERROR: Playback failed for $assetName: $e');
     }
   }
 
