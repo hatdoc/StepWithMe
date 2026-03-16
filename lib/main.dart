@@ -41,14 +41,15 @@ class AudioService {
 
   AudioService() {
     _initFuture = _init();
+    _audioPlayer.onLog.listen((msg) => developer.log('AudioPlayer: $msg', name: 'AudioService'));
+    _audioPlayer.onPlayerStateChanged.listen((state) => developer.log('Player State: $state', name: 'AudioService'));
   }
 
   Future<void> _init() async {
     if (_isInitialized) return;
 
     try {
-      // Use low latency mode for metronome-like behavior
-      await _audioPlayer.setReleaseMode(ReleaseMode.stop);
+      developer.log('Initializing AudioService...', name: 'AudioService');
       
       // Set audio context for iOS/Android
       await _audioPlayer.setAudioContext(AudioContext(
@@ -65,6 +66,9 @@ class AudioService {
           },
         ),
       ));
+
+      await _audioPlayer.setReleaseMode(ReleaseMode.stop);
+      await _audioPlayer.setVolume(1.0);
 
       // Pre-cache sources
       final sounds = [
@@ -85,7 +89,7 @@ class AudioService {
         _sourceCache[s] = AssetSource('audio/$s');
       }
 
-      developer.log('AudioService initialized successfully', name: 'AudioService');
+      developer.log('AudioService initialized successfully. Sources cached: ${_sourceCache.length}', name: 'AudioService');
       _isInitialized = true;
     } catch (e) {
       developer.log('Failed to initialize AudioService: $e', name: 'AudioService', level: 1000);
@@ -93,23 +97,24 @@ class AudioService {
   }
 
   Future<void> play(String soundFile) async {
-    if (!_isInitialized) await _initFuture;
+    if (!_isInitialized) {
+      developer.log('Play called before init, waiting...', name: 'AudioService');
+      await _initFuture;
+    }
 
     String assetName = soundFile;
-    // Handle legacy mappings if any
     if (soundFile == 'heel_strike') assetName = 'walking_wood_floor.mp3';
     if (soundFile == 'soft_sneaker') assetName = 'walking_in_forest.mp3';
     if (soundFile == 'walk_on_rock.mp3') assetName = 'walk_on_rocks.mp3';
 
     try {
       final source = _sourceCache[assetName] ?? AssetSource('audio/$assetName');
+      developer.log('Attempting to play: $assetName', name: 'AudioService');
       
-      // For rhythmic precision, we stop and then play
-      // This ensures the sound starts from the beginning every time
+      // Explicitly set volume and play
       await _audioPlayer.stop();
+      await _audioPlayer.setVolume(1.0);
       await _audioPlayer.play(source);
-      
-      developer.log('Playing sound: $assetName', name: 'AudioService');
     } catch (e) {
       developer.log('Audio playback error for $assetName: $e',
           name: 'AudioService', level: 1000);
@@ -118,6 +123,7 @@ class AudioService {
 
   Future<void> stop() async {
     try {
+      developer.log('Stopping playback', name: 'AudioService');
       await _audioPlayer.stop();
     } catch (e) {
       developer.log('Error stopping audio: $e', name: 'AudioService');
