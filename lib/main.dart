@@ -132,12 +132,14 @@ class AudioService {
 }
 
 final bpmServiceProvider = Provider((ref) {
+  developer.log('Initializing BPMServiceProvider', name: 'BPMService');
   final audioService = ref.read(audioServiceProvider);
   final service = BPMService(audioService, ref);
 
   // Listen for play/pause toggles
   ref.listen<bool>(stateServiceProvider.select((s) => s.isPlaying),
       (prev, next) {
+    developer.log('isPlaying changed: $prev -> $next', name: 'BPMService');
     if (next) {
       service.start();
     } else {
@@ -149,6 +151,7 @@ final bpmServiceProvider = Provider((ref) {
   ref.listen<int>(stateServiceProvider.select((s) => s.bpm), (prev, next) {
     final state = ref.read(stateServiceProvider);
     if (state.isPlaying) {
+      developer.log('BPM changed while playing: $next', name: 'BPMService');
       service.restart();
     }
   });
@@ -157,11 +160,15 @@ final bpmServiceProvider = Provider((ref) {
   ref.listen<String>(stateServiceProvider.select((s) => s.sound), (prev, next) {
     final state = ref.read(stateServiceProvider);
     if (state.isPlaying) {
-      service.restart(immediate: true); // Immediate feedback on sound change
+      developer.log('Sound changed while playing: $next', name: 'BPMService');
+      service.restart(immediate: true);
     }
   });
 
-  ref.onDispose(() => service.stop());
+  ref.onDispose(() {
+    developer.log('BPMServiceProvider disposed', name: 'BPMService');
+    service.stop();
+  });
   return service;
 });
 
@@ -173,17 +180,23 @@ class BPMService {
   BPMService(this._audioService, this._ref);
 
   void start() {
+    developer.log('Starting BPMService...', name: 'BPMService');
     _timer?.cancel();
     final state = _ref.read(stateServiceProvider);
-    if (state.bpm <= 0) return;
+    developer.log('Current State - BPM: ${state.bpm}, Sound: ${state.sound}', name: 'BPMService');
+    
+    if (state.bpm <= 0) {
+      developer.log('BPM is 0 or less, aborting start', name: 'BPMService');
+      return;
+    }
 
     // Play the first step immediately
     _audioService.play(state.sound);
-
     _scheduleNextTick();
   }
 
   void restart({bool immediate = false}) {
+    developer.log('Restarting BPMService (immediate: $immediate)', name: 'BPMService');
     _timer?.cancel();
     final state = _ref.read(stateServiceProvider);
     if (!state.isPlaying) return;
@@ -198,18 +211,22 @@ class BPMService {
     final state = _ref.read(stateServiceProvider);
     if (state.bpm <= 0 || !state.isPlaying) return;
 
-    final interval = Duration(milliseconds: 60000 ~/ state.bpm);
-    _timer = Timer.periodic(interval, (_) {
+    final intervalMs = 60000 ~/ state.bpm;
+    developer.log('Scheduling ticks every ${intervalMs}ms', name: 'BPMService');
+    
+    _timer = Timer.periodic(Duration(milliseconds: intervalMs), (_) {
       final currentState = _ref.read(stateServiceProvider);
       if (currentState.isPlaying) {
         _audioService.play(currentState.sound);
       } else {
+        developer.log('Timer ticked but isPlaying is false, canceling', name: 'BPMService');
         _timer?.cancel();
       }
     });
   }
 
   void stop() {
+    developer.log('Stopping BPMService', name: 'BPMService');
     _timer?.cancel();
     _audioService.stop();
   }
@@ -256,10 +273,15 @@ class HomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the BPM service to ensure it's initialized and listening
+    ref.watch(bpmServiceProvider);
+    
     final theme = Theme.of(context);
     final appState = ref.watch(stateServiceProvider);
     final stateService = ref.read(stateServiceProvider.notifier);
     final audioService = ref.read(audioServiceProvider);
+
+    developer.log('HomePage Build - isPlaying: ${appState.isPlaying}', name: 'UI');
 
     final maxHR = appState.age != null ? 220 - appState.age! : 0;
     final fatBurnMin = (maxHR * 0.60).toInt();
