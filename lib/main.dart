@@ -597,10 +597,6 @@ class HomePage extends ConsumerWidget {
                   onChanged: (value) async {
                     if (value != null) {
                       stateService.setSound(value);
-                      // Preview sound when selected
-                      if (!appState.isPlaying) {
-                        await audioService.play(value);
-                      }
                     }
                   },
                   dropdownColor: theme.colorScheme.surface,
