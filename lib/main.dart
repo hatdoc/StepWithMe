@@ -97,6 +97,24 @@ class AudioService {
     }
   }
 
+  // Volume normalization map to balance perceived loudness of different recordings
+  double _getNormalizedVolume(String soundKey) {
+    switch (soundKey) {
+      case 'grass': return 1.0;
+      case 'forest': return 0.95;
+      case 'gravel': return 0.8;      // Gravel is naturally crunchy and loud
+      case 'rocks': return 0.85;
+      case 'snow': return 1.0;
+      case 'tile': return 0.85;
+      case 'wood': return 0.9;
+      case 'metal': return 0.7;      // Metal strikes are very sharp/loud
+      case 'water': return 1.0;
+      case 'muddy_gravel': return 0.85;
+      case 'water_sweetener': return 0.75;
+      default: return 1.0;
+    }
+  }
+
   Future<void> play(String soundId) async {
     if (!_isInitialized) {
       print('AudioService: Play called before init, waiting...');
@@ -105,18 +123,25 @@ class AudioService {
 
     String finalKey = soundId;
     // Map any legacy names/keys to standardized ones
-    if (soundId == 'heel_strike' || soundId == 'walking_wood_floor.mp3') finalKey = 'wood';
-    if (soundId == 'soft_sneaker' || soundId == 'forest' || soundId == 'walking_in_forest.mp3' || soundId == 'walk_on_forest.mp3') finalKey = 'forest';
-    if (soundId == 'gravel' || soundId == 'walking_on_gravel_path.mp3' || soundId == 'walk_on_gravel.mp3') finalKey = 'gravel';
-    if (soundId == 'walk_on_rock.mp3' || soundId == 'rocks') finalKey = 'rocks';
+    if (soundId == 'heel_strike' || soundId == 'walking_wood_floor.mp3') {
+      finalKey = 'wood';
+    } else if (soundId == 'soft_sneaker' || soundId == 'forest' || soundId == 'walking_in_forest.mp3' || soundId == 'walk_on_forest.mp3') {
+      finalKey = 'forest';
+    } else if (soundId == 'gravel' || soundId == 'walking_on_gravel_path.mp3' || soundId == 'walk_on_gravel.mp3') {
+      finalKey = 'gravel';
+    } else if (soundId == 'walk_on_rock.mp3' || soundId == 'rocks') {
+      finalKey = 'rocks';
+    }
 
     try {
       final source = _sourceCache[finalKey] ?? AssetSource('audio/$finalKey');
-      print('AudioService: Playing sound key -> $finalKey');
+      final volume = _getNormalizedVolume(finalKey);
       
-      // Immediate stop/play for rhythm
-      await _audioPlayer.stop();
-      await _audioPlayer.play(source, volume: 1.0);
+      developer.log('AudioService: Playing $finalKey at volume $volume', name: 'AudioService');
+      
+      // We no longer call stop() explicitly before play() to avoid rhythmic gaps 
+      // and volume dips. Audioplayers handles the restart internally.
+      await _audioPlayer.play(source, volume: volume);
     } catch (e) {
       print('AudioService ERROR: Playback failed for $finalKey: $e');
     }
