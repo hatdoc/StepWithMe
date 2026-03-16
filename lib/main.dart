@@ -46,75 +46,82 @@ class AudioService {
   Future<void> _init() async {
     if (_isInitialized) return;
 
-    if (kIsWeb) {
+    try {
+      // Use low latency mode for metronome-like behavior
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
-    }
+      
+      // Set audio context for iOS/Android
+      await _audioPlayer.setAudioContext(AudioContext(
+        android: const AudioContextAndroid(
+          usageType: AndroidUsageType.media,
+          contentType: AndroidContentType.music,
+          audioFocus: AndroidAudioFocus.gain,
+        ),
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.playback,
+          options: {
+            AVAudioSessionOptions.mixWithOthers,
+            AVAudioSessionOptions.defaultToSpeaker,
+          },
+        ),
+      ));
 
-    // Set audio context for a more standard media usage
-    await _audioPlayer.setAudioContext(AudioContext(
-      android: const AudioContextAndroid(
-        usageType: AndroidUsageType.media,
-        contentType: AndroidContentType.music,
-        audioFocus: AndroidAudioFocus.none,
-      ),
-      iOS: AudioContextIOS(
-        category: AVAudioSessionCategory.playback,
-        options: const {
-          AVAudioSessionOptions.mixWithOthers,
-          AVAudioSessionOptions.duckOthers,
-        },
-      ),
-    ));
+      // Pre-cache sources
+      final sounds = [
+        'walk_on_grass.mp3',
+        'walking_in_forest.mp3',
+        'walking_on_gravel_path.mp3',
+        'walk_on_rocks.mp3',
+        'walk_on_snow.mp3',
+        'walk_on_tile.mp3',
+        'walking_wood_floor.mp3',
+        'walk_on_solid_metal.mp3',
+        'walk_in_shallow_water.mp3',
+        'walk_on_muddy_gravel.mp3',
+        'water_walk_sweetener.mp3',
+      ];
 
-    // Pre-cache all sounds to memory
-    final sounds = [
-      'walk_on_grass.mp3',
-      'walking_in_forest.mp3',
-      'walking_on_gravel_path.mp3',
-      'walk_on_rocks.mp3',
-      'walk_on_snow.mp3',
-      'walk_on_tile.mp3',
-      'walking_wood_floor.mp3',
-      'walk_on_solid_metal.mp3',
-      'walk_in_shallow_water.mp3',
-      'walk_on_muddy_gravel.mp3',
-      'water_walk_sweetener.mp3',
-    ];
-
-    for (var s in sounds) {
-      final source = AssetSource('audio/$s');
-      _sourceCache[s] = source;
-      try {
-        await AudioCache.instance.load('audio/$s');
-      } catch (e) {
-        developer.log('Preload warning for $s: $e', name: 'AudioService');
+      for (var s in sounds) {
+        _sourceCache[s] = AssetSource('audio/$s');
       }
-    }
 
-    _isInitialized = true;
+      developer.log('AudioService initialized successfully', name: 'AudioService');
+      _isInitialized = true;
+    } catch (e) {
+      developer.log('Failed to initialize AudioService: $e', name: 'AudioService', level: 1000);
+    }
   }
 
   Future<void> play(String soundFile) async {
     if (!_isInitialized) await _initFuture;
 
-    String assetPath = soundFile;
-    if (soundFile == 'heel_strike') assetPath = 'walking_wood_floor.mp3';
-    if (soundFile == 'soft_sneaker') assetPath = 'walking_in_forest.mp3';
-    if (soundFile == 'walk_on_rock.mp3') assetPath = 'walk_on_rocks.mp3';
+    String assetName = soundFile;
+    // Handle legacy mappings if any
+    if (soundFile == 'heel_strike') assetName = 'walking_wood_floor.mp3';
+    if (soundFile == 'soft_sneaker') assetName = 'walking_in_forest.mp3';
+    if (soundFile == 'walk_on_rock.mp3') assetName = 'walk_on_rocks.mp3';
 
     try {
-      final source = _sourceCache[assetPath] ?? AssetSource('audio/$assetPath');
-      // Low latency: don't call stop() explicitly, native handles re-playing
-      await _audioPlayer.play(source, volume: 1.0);
+      final source = _sourceCache[assetName] ?? AssetSource('audio/$assetName');
+      
+      // For rhythmic precision, we stop and then play
+      // This ensures the sound starts from the beginning every time
+      await _audioPlayer.stop();
+      await _audioPlayer.play(source);
+      
+      developer.log('Playing sound: $assetName', name: 'AudioService');
     } catch (e) {
-      developer.log('Audio playback error for $assetPath: $e',
+      developer.log('Audio playback error for $assetName: $e',
           name: 'AudioService', level: 1000);
-      debugPrint("Audio playback error: $e");
     }
   }
 
   Future<void> stop() async {
-    await _audioPlayer.stop();
+    try {
+      await _audioPlayer.stop();
+    } catch (e) {
+      developer.log('Error stopping audio: $e', name: 'AudioService');
+    }
   }
 }
 
